@@ -7,8 +7,8 @@ interface ExpensesTableProps {
     currentUser: StaffMember;
     paymentAccounts: PaymentAccount[];
     onEdit: (expense: Expense) => void;
-    onDelete: (expenseId: string) => void;
-    onBillExpense: (expenseId: string) => void;
+    onDelete: (expenseId: string) => Promise<void> | void;
+    onBillExpense: (expenseId: string) => Promise<void>;
 }
 
 const ExpensesTable: React.FC<ExpensesTableProps> = ({ expenses, currentUser, paymentAccounts, onEdit, onDelete, onBillExpense }) => {
@@ -56,7 +56,7 @@ const ExpensesTable: React.FC<ExpensesTableProps> = ({ expenses, currentUser, pa
                                         </span>
                                     ) : expense.bookingId && canManageExpenses ? (
                                         <button
-                                            onClick={() => onBillExpense(expense.id)}
+                                            onClick={async () => await onBillExpense(expense.id)}
                                             className="flex items-center text-xs py-1 px-2 rounded-md bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500 hover:text-white transition-colors"
                                             title={`Add this expense to the invoice for booking ${expense.bookingId}`}
                                         >
@@ -81,8 +81,8 @@ const ExpensesTable: React.FC<ExpensesTableProps> = ({ expenses, currentUser, pa
                                             >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>
                                             </button>
-                                            <button 
-                                                onClick={() => onDelete(expense.id)}
+                                            <button
+                                                onClick={async () => await onDelete(expense.id)}
                                                 className="p-1 text-slate-400 hover:text-red-500 transition-colors"
                                                 title="Delete Expense"
                                             >

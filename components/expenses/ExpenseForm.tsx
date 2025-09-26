@@ -31,7 +31,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, bookings, paymentAcc
         }
     }, [expense, paymentAccounts]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (amount === '' || amount <= 0) {
             alert('Please enter a valid amount.');
@@ -41,7 +41,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, bookings, paymentAcc
             alert('Please select an account to pay from.');
             return;
         }
-        onSave({
+        await onSave({
             id: expense?.id,
             description,
             category,

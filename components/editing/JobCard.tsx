@@ -6,6 +6,7 @@ import { MediaIcon, GoogleDriveIcon, UrgentIcon, HighPriorityIcon } from '../../
 
 const JobCard: React.FC<JobCardProps> = ({ job, statuses, currentUser, onEdit, onDelete, onViewClient }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const canManageEditing = hasPermission(currentUser.role, Permission.MANAGE_EDITING);
 
@@ -28,6 +29,25 @@ const JobCard: React.FC<JobCardProps> = ({ job, statuses, currentUser, onEdit, o
         e.stopPropagation();
     };
 
+
+    const handleEditClick = () => {
+        setIsMenuOpen(false);
+        onEdit(job);
+    };
+
+    const handleDeleteClick = async () => {
+        if (isDeleting) {
+            return;
+        }
+
+        try {
+            setIsDeleting(true);
+            await onDelete(job.id);
+        } finally {
+            setIsDeleting(false);
+            setIsMenuOpen(false);
+        }
+    };
 
     return (
         <div className="bg-slate-800 rounded-xl shadow-lg overflow-hidden group transition-all duration-300 transform hover:-translate-y-1 hover:shadow-cyan-500/20">
@@ -84,8 +104,8 @@ const JobCard: React.FC<JobCardProps> = ({ job, statuses, currentUser, onEdit, o
                                 </button>
                                  {isMenuOpen && (
                                     <div className="absolute right-0 bottom-full mb-2 w-32 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-10">
-                                        <button onClick={() => { onEdit(job); setIsMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-cyan-400">Edit</button>
-                                        <button onClick={() => { onDelete(job.id); setIsMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-red-500">Delete</button>
+                                        <button onClick={handleEditClick} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-cyan-400">Edit</button>
+                                        <button onClick={handleDeleteClick} disabled={isDeleting} className={`w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-red-500 ${isDeleting ? 'opacity-60 cursor-not-allowed' : ''}`}>{isDeleting ? 'Deleting…' : 'Delete'}</button>
                                     </div>
                                 )}
                             </div>

@@ -1,21 +1,30 @@
 import React, { useState } from 'react';
-import Modal from '../shared/Modal';
 
 interface RevisionNotesModalProps {
-    onSave: (notes: string) => void;
+    onSave: (notes: string) => Promise<void> | void;
     onClose: () => void;
+    isSaving?: boolean;
 }
 
-const RevisionNotesModal: React.FC<RevisionNotesModalProps> = ({ onSave, onClose }) => {
+const RevisionNotesModal: React.FC<RevisionNotesModalProps> = ({ onSave, onClose, isSaving = false }) => {
     const [notes, setNotes] = useState('');
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const [error, setError] = useState<string | null>(null);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!notes.trim()) {
             alert('Please provide revision notes from the client.');
             return;
         }
-        onSave(notes);
+
+        try {
+            setError(null);
+            await onSave(notes);
+        } catch (err) {
+            console.error('Failed to submit revision notes', err);
+            setError('Failed to submit revision request. Please try again.');
+        }
     };
 
     return (
@@ -44,11 +53,13 @@ const RevisionNotesModal: React.FC<RevisionNotesModalProps> = ({ onSave, onClose
                 </button>
                 <button
                     type="submit"
-                    className="py-2 px-4 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors"
+                    disabled={isSaving}
+                    className={`py-2 px-4 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors ${isSaving ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
-                    Submit Revision Request
+                    {isSaving ? 'Submitting...' : 'Submit Revision Request'}
                 </button>
             </div>
+            {error && <p className="text-sm text-red-400 text-right">{error}</p>}
         </form>
     );
 };
