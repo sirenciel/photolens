@@ -18,3 +18,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1NksvyaEmdqRcALjlGF4Kjm
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Backend & Database Roadmap
+
+The current project only ships a frontend prototype backed by mock data. To evolve it into a full-stack product, see the [Photolens Backend Database Blueprint](docs/backend/database.md) for guidance on choosing a database (PostgreSQL), setting up Prisma migrations, and mapping each frontend entity to persistent tables.
