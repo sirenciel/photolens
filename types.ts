@@ -243,14 +243,14 @@ export interface BookingsPageProps {
     paymentAccounts: PaymentAccount[];
     invoices: Invoice[];
     currentUser: StaffMember;
-    onSaveBooking: (booking: Omit<Booking, 'id' | 'clientName' | 'clientAvatarUrl' | 'photographer' | 'invoiceId' | 'sessionType' | 'photoSelections'> & { id?: string }) => Booking | void;
-    onDeleteBooking: (bookingId: string) => void;
-    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Client | void;
+    onSaveBooking: (booking: Omit<Booking, 'id' | 'clientName' | 'clientAvatarUrl' | 'photographer' | 'invoiceId' | 'sessionType' | 'photoSelections'> & { id?: string }) => Promise<Booking | void>;
+    onDeleteBooking: (bookingId: string) => Promise<void> | void;
+    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Promise<Client | void>;
     onViewClient: (clientId: string) => void;
     onPreviewInvoice: (invoiceId: string, type?: 'invoice' | 'receipt') => void;
-    onCreateInvoiceFromBooking: (bookingId: string) => Invoice | void;
-    onRecordPayment: (invoiceId: string, paymentData: Omit<Payment, 'id' | 'recordedBy'>) => void;
-    onSavePhotographerNotes: (bookingId: string, notes: string) => void;
+    onCreateInvoiceFromBooking: (bookingId: string) => Promise<Invoice | void>;
+    onRecordPayment: (invoiceId: string, paymentData: Omit<Payment, 'id' | 'recordedBy'>) => Promise<void>;
+    onSavePhotographerNotes: (bookingId: string, notes: string) => Promise<void>;
     initialFilters?: { status?: string, sessionCategoryId?: string, clientId?: string };
 }
 
@@ -261,16 +261,16 @@ export interface BookingFormProps {
     sessionTypes: SessionCategory[];
     invoices: Invoice[];
     bookings: Booking[];
-    onSave: (booking: Omit<Booking, 'id' | 'clientName' | 'clientAvatarUrl' | 'photographer' | 'invoiceId' | 'sessionType' | 'photoSelections'> & { id?: string }) => void;
+    onSave: (booking: Omit<Booking, 'id' | 'clientName' | 'clientAvatarUrl' | 'photographer' | 'invoiceId' | 'sessionType' | 'photoSelections'> & { id?: string }) => Promise<void>;
     onCancel: () => void;
-    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Client | void;
+    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Promise<Client | void>;
 }
 
 export interface ClientsPageProps {
     clients: Client[];
     currentUser: StaffMember;
-    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Client | void;
-    onDeleteClient: (clientId: string) => void;
+    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Promise<Client | void>;
+    onDeleteClient: (clientId: string) => Promise<void>;
     onViewProfile: (clientId: string) => void;
 }
 
@@ -278,12 +278,12 @@ export interface ClientCardProps {
     client: Client;
     currentUser: StaffMember;
     onViewProfile: (clientId: string) => void;
-    onDelete: (clientId: string) => void;
+    onDelete: (clientId: string) => Promise<void> | void;
 }
 
 export interface ClientFormProps {
     client?: Client | null;
-    onSave: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Client | void;
+    onSave: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Promise<Client | void>;
     onCancel: () => void;
 }
 
@@ -297,14 +297,14 @@ export interface ClientProfilePageProps {
     activities: Activity[];
     currentUser: StaffMember;
     onBack: () => void;
-    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Client | void;
-    onDeleteClient: (clientId: string) => void;
-    onSaveNotes: (clientId: string, notes: string) => void;
-    onAddPhotoSelection: (bookingId: string, selectionName: string) => void;
-    onRemovePhotoSelection: (bookingId: string, selectionName: string) => void;
-    onTogglePhotoSelectionEdited: (bookingId: string, selectionName: string) => void;
+    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Promise<Client | void>;
+    onDeleteClient: (clientId: string) => Promise<void>;
+    onSaveNotes: (clientId: string, notes: string) => Promise<void>;
+    onAddPhotoSelection: (bookingId: string, selectionName: string) => Promise<void>;
+    onRemovePhotoSelection: (bookingId: string, selectionName: string) => Promise<void>;
+    onTogglePhotoSelectionEdited: (bookingId: string, selectionName: string) => Promise<void>;
     onPreviewInvoice: (invoiceId: string, type?: 'invoice' | 'receipt') => void;
-    onFinalizeSelections: (bookingId: string) => void;
+    onFinalizeSelections: (bookingId: string) => Promise<void>;
     navigateAndFilter: (page: string, filters: any) => void;
 }
 
@@ -315,9 +315,9 @@ export interface InvoicesPageProps {
     sessionTypes: SessionCategory[];
     paymentAccounts: PaymentAccount[];
     currentUser: StaffMember;
-    onSaveInvoice: (invoice: Omit<Invoice, 'id' | 'clientName' | 'clientAvatarUrl' | 'amount' | 'amountPaid' | 'payments' | 'lastReminderSent'> & { id?: string }) => void;
-    onDeleteInvoice: (invoiceId: string) => void;
-    onRecordPayment: (invoiceId: string, paymentData: Omit<Payment, 'id' | 'recordedBy'>) => void;
+    onSaveInvoice: (invoice: Omit<Invoice, 'id' | 'clientName' | 'clientAvatarUrl' | 'amount' | 'amountPaid' | 'payments' | 'lastReminderSent'> & { id?: string }) => Promise<void>;
+    onDeleteInvoice: (invoiceId: string) => Promise<void>;
+    onRecordPayment: (invoiceId: string, paymentData: Omit<Payment, 'id' | 'recordedBy'>) => Promise<void>;
     onViewClient: (clientId: string) => void;
     onPreviewInvoice: (invoiceId: string, type?: 'invoice' | 'receipt') => void;
     initialFilters?: { status?: string, dateRange?: { start: Date, end: Date }, clientId?: string };
@@ -328,14 +328,14 @@ export interface InvoiceFormProps {
     bookings: Booking[];
     clients: Client[];
     sessionTypes: SessionCategory[];
-    onSave: (invoice: Omit<Invoice, 'id' | 'clientName' | 'clientAvatarUrl' | 'amount' | 'amountPaid' | 'payments' | 'lastReminderSent'> & { id?: string }) => void;
+    onSave: (invoice: Omit<Invoice, 'id' | 'clientName' | 'clientAvatarUrl' | 'amount' | 'amountPaid' | 'payments' | 'lastReminderSent'> & { id?: string }) => Promise<void>;
     onCancel: () => void;
 }
 
 export interface RecordPaymentFormProps {
     invoice: Invoice;
     paymentAccounts: PaymentAccount[];
-    onSave: (paymentData: Omit<Payment, 'id' | 'recordedBy'>) => void;
+    onSave: (paymentData: Omit<Payment, 'id' | 'recordedBy'>) => Promise<void>;
     onCancel: () => void;
 }
 
@@ -346,12 +346,12 @@ export interface EditingWorkflowPageProps {
     clients: Client[];
     editingStatuses: EditingStatus[];
     currentUser: StaffMember;
-    onSaveJob: (job: Omit<EditingJob, 'id' | 'clientName' | 'editorName' | 'editorAvatarUrl' | 'uploadDate'> & { id?: string }) => void;
-    onDeleteJob: (jobId: string) => void;
-    onUpdateJobStatus: (jobId: string, newStatusId: string) => void;
+    onSaveJob: (job: Omit<EditingJob, 'id' | 'clientName' | 'editorName' | 'editorAvatarUrl' | 'uploadDate'> & { id?: string }) => Promise<void>;
+    onDeleteJob: (jobId: string) => Promise<void>;
+    onUpdateJobStatus: (jobId: string, newStatusId: string) => Promise<void>;
     onViewClient: (clientId: string) => void;
-    onNotifyClientForReview: (jobId: string) => void;
-    onRequestRevision: (jobId: string, notes: string) => void;
+    onNotifyClientForReview: (jobId: string) => Promise<void>;
+    onRequestRevision: (jobId: string, notes: string) => Promise<void>;
     initialFilters?: { status?: string, clientId?: string };
 }
 
@@ -360,7 +360,7 @@ export interface JobCardProps {
     statuses: EditingStatus[];
     currentUser: StaffMember;
     onEdit: (job: EditingJob) => void;
-    onDelete: (jobId: string) => void;
+    onDelete: (jobId: string) => Promise<void>;
     onViewClient: (clientId: string) => void;
 }
 
@@ -370,18 +370,18 @@ export interface JobFormProps {
     staff: StaffMember[];
     clients: Client[];
     statuses: EditingStatus[];
-    onSave: (job: Omit<EditingJob, 'id' | 'clientName' | 'editorName' | 'editorAvatarUrl' | 'uploadDate'> & { id?: string }) => void;
+    onSave: (job: Omit<EditingJob, 'id' | 'clientName' | 'editorName' | 'editorAvatarUrl' | 'uploadDate'> & { id?: string }) => Promise<void>;
     onCancel: () => void;
 }
 
 export interface KanbanViewProps {
     jobs: EditingJob[];
     statuses: EditingStatus[];
-    onUpdateStatus: (jobId: string, newStatusId: string) => void;
+    onUpdateStatus: (jobId: string, newStatusId: string) => Promise<void>;
     onViewJob: (job: EditingJob) => void;
     onViewClient: (clientId: string) => void;
-    onNotifyClient: (jobId: string) => void;
-    onRequestRevision: (job: EditingJob) => void;
+    onNotifyClient: (jobId: string) => Promise<void>;
+    onRequestRevision: (job: EditingJob) => Promise<void>;
 }
 
 export interface TableViewProps {
@@ -389,10 +389,10 @@ export interface TableViewProps {
     statuses: EditingStatus[];
     currentUser: StaffMember;
     onEdit: (job: EditingJob) => void;
-    onDelete: (jobId: string) => void;
+    onDelete: (jobId: string) => Promise<void>;
     onViewClient: (clientId: string) => void;
-    onNotifyClient: (jobId: string) => void;
-    onRequestRevision: (job: EditingJob) => void;
+    onNotifyClient: (jobId: string) => Promise<void>;
+    onRequestRevision: (job: EditingJob) => Promise<void>;
 }
 
 export interface ReportsPageProps {
@@ -411,13 +411,13 @@ export interface ReportsPageProps {
 export interface StaffPageProps {
     staff: StaffMember[];
     currentUser: StaffMember;
-    onSaveStaff: (staffMember: Omit<StaffMember, 'id' | 'status' | 'lastLogin' | 'avatarUrl'> & { id?: string }) => void;
-    onDeleteStaff: (staffId: string) => void;
+    onSaveStaff: (staffMember: Omit<StaffMember, 'id' | 'status' | 'lastLogin' | 'avatarUrl'> & { id?: string }) => Promise<void>;
+    onDeleteStaff: (staffId: string) => Promise<void>;
 }
 
 export interface StaffFormProps {
     staffMember?: StaffMember | null;
-    onSave: (staffMember: Omit<StaffMember, 'id' | 'status' | 'lastLogin' | 'avatarUrl'> & { id?: string }) => void;
+    onSave: (staffMember: Omit<StaffMember, 'id' | 'status' | 'lastLogin' | 'avatarUrl'> & { id?: string }) => Promise<void>;
     onCancel: () => void;
 }
 
@@ -426,16 +426,16 @@ export interface ExpensesPageProps {
     bookings: Booking[];
     paymentAccounts: PaymentAccount[];
     currentUser: StaffMember;
-    onSaveExpense: (expense: Omit<Expense, 'id'> & { id?: string }) => void;
-    onDeleteExpense: (expenseId: string) => void;
-    onBillExpense: (expenseId: string) => void;
+    onSaveExpense: (expense: Omit<Expense, 'id'> & { id?: string }) => Promise<void>;
+    onDeleteExpense: (expenseId: string) => Promise<void>;
+    onBillExpense: (expenseId: string) => Promise<void>;
 }
 
 export interface ExpenseFormProps {
     expense?: Expense | null;
     bookings: Booking[];
     paymentAccounts: PaymentAccount[];
-    onSave: (expense: Omit<Expense, 'id'> & { id?: string }) => void;
+    onSave: (expense: Omit<Expense, 'id'> & { id?: string }) => Promise<void>;
     onCancel: () => void;
 }
 
@@ -447,25 +447,25 @@ export interface SettingsPageProps {
     bookings: Booking[];
     editingJobs: EditingJob[];
     currentUser: StaffMember;
-    onSaveCategory: (category: Omit<SessionCategory, 'packages'> & { id?: string }) => void;
-    onDeleteCategory: (categoryId: string) => void;
-    onSavePackage: (categoryId: string, pkg: Omit<SessionPackage, 'id'> & { id?: string }) => void;
-    onDeletePackage: (categoryId: string, packageId: string) => void;
-    onSaveStatus: (status: Omit<EditingStatus, 'id'> & {id?: string}) => void;
-    onDeleteStatus: (statusId: string) => void;
-    onSavePaymentAccount: (account: Omit<PaymentAccount, 'id'> & { id?: string }) => void;
-    onDeletePaymentAccount: (accountId: string) => void;
-    onSaveSettings: (settings: AppSettings) => void;
+    onSaveCategory: (category: Omit<SessionCategory, 'packages'> & { id?: string }) => Promise<void>;
+    onDeleteCategory: (categoryId: string) => Promise<void>;
+    onSavePackage: (categoryId: string, pkg: Omit<SessionPackage, 'id'> & { id?: string }) => Promise<void>;
+    onDeletePackage: (categoryId: string, packageId: string) => Promise<void>;
+    onSaveStatus: (status: Omit<EditingStatus, 'id'> & {id?: string}) => Promise<void>;
+    onDeleteStatus: (statusId: string) => Promise<void>;
+    onSavePaymentAccount: (account: Omit<PaymentAccount, 'id'> & { id?: string }) => Promise<void>;
+    onDeletePaymentAccount: (accountId: string) => Promise<void>;
+    onSaveSettings: (settings: AppSettings) => Promise<void>;
 }
 
 export interface SessionCategoryFormProps {
     category?: SessionCategory | null;
-    onSave: (category: Omit<SessionCategory, 'packages'> & { id?: string }) => void;
+    onSave: (category: Omit<SessionCategory, 'packages'> & { id?: string }) => Promise<void>;
     onCancel: () => void;
 }
 
 export interface SessionPackageFormProps {
     pkg?: SessionPackage | null;
-    onSave: (pkg: Omit<SessionPackage, 'id'> & { id?: string }) => void;
+    onSave: (pkg: Omit<SessionPackage, 'id'> & { id?: string }) => Promise<void>;
     onCancel: () => void;
 }

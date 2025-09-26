@@ -1,28 +1,41 @@
-import React from 'react';
-import { EditingJob, Permission, StaffMember, EditingStatus } from '../../types';
+import React, { useState } from 'react';
+import { EditingJob, Permission, StaffMember, EditingStatus, TableViewProps } from '../../types';
 import StatusBadge from './StatusBadge';
 import { hasPermission } from '../../services/permissions';
 import { WhatsAppIcon, GoogleDriveIcon, UrgentIcon, HighPriorityIcon } from '../../constants';
 
-interface TableViewProps {
-    jobs: EditingJob[];
-    statuses: EditingStatus[];
-    currentUser: StaffMember;
-    onEdit: (job: EditingJob) => void;
-    onDelete: (jobId: string) => void;
-    onViewClient: (clientId: string) => void;
-    onNotifyClient: (jobId: string) => void;
-    onRequestRevision: (job: EditingJob) => void;
-}
-
 const TableView: React.FC<TableViewProps> = ({ jobs, statuses, currentUser, onEdit, onDelete, onViewClient, onNotifyClient, onRequestRevision }) => {
     const canManageEditing = hasPermission(currentUser.role, Permission.MANAGE_EDITING);
+    const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
+    const [notifyingJobId, setNotifyingJobId] = useState<string | null>(null);
     
     const formatDate = (date: Date) => {
         return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     };
     
     const reviewStatusId = statuses.find(s => s.name === 'Client Review')?.id;
+
+    const handleDelete = async (jobId: string) => {
+        try {
+            setDeletingJobId(jobId);
+            await onDelete(jobId);
+        } finally {
+            setDeletingJobId(null);
+        }
+    };
+
+    const handleNotify = async (jobId: string) => {
+        try {
+            setNotifyingJobId(jobId);
+            await onNotifyClient(jobId);
+        } finally {
+            setNotifyingJobId(null);
+        }
+    };
+
+    const handleRequestRevisionClick = async (job: EditingJob) => {
+        await onRequestRevision(job);
+    };
 
     return (
         <div className="bg-slate-800 rounded-xl shadow-lg overflow-hidden">
@@ -89,10 +102,15 @@ const TableView: React.FC<TableViewProps> = ({ jobs, statuses, currentUser, onEd
                                         <div className="flex items-center space-x-2">
                                             {job.statusId === reviewStatusId && (
                                                 <>
-                                                    <button onClick={() => onNotifyClient(job.id)} className="p-1 text-slate-400 hover:text-green-400" title="Notify Client for Review via WhatsApp">
-                                                        <WhatsAppIcon />
+                                                    <button
+                                                        onClick={() => handleNotify(job.id)}
+                                                        disabled={notifyingJobId === job.id}
+                                                        className={`p-1 text-slate-400 hover:text-green-400 ${notifyingJobId === job.id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                                        title="Notify Client for Review via WhatsApp"
+                                                    >
+                                                        <WhatsAppIcon className={notifyingJobId === job.id ? 'animate-spin' : ''} />
                                                     </button>
-                                                    <button onClick={() => onRequestRevision(job)} className="p-1 text-slate-400 hover:text-purple-400" title="Request Revision">
+                                                    <button onClick={() => handleRequestRevisionClick(job)} className="p-1 text-slate-400 hover:text-purple-400" title="Request Revision">
                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                                             <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 11.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-5.586l-1.707 1.707a1 1 0 001.414-1.414l-7-7z" />
                                                         </svg>
@@ -100,7 +118,14 @@ const TableView: React.FC<TableViewProps> = ({ jobs, statuses, currentUser, onEd
                                                 </>
                                             )}
                                             <button onClick={() => onEdit(job)} className="p-1 text-slate-400 hover:text-cyan-400" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg></button>
-                                            <button onClick={() => onDelete(job.id)} className="p-1 text-slate-400 hover:text-red-500" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg></button>
+                                            <button
+                                                onClick={() => handleDelete(job.id)}
+                                                disabled={deletingJobId === job.id}
+                                                className={`p-1 text-slate-400 hover:text-red-500 ${deletingJobId === job.id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                                title="Delete"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${deletingJobId === job.id ? 'animate-spin' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                                            </button>
                                         </div>
                                     </td>
                                 )}

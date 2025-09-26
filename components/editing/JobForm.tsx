@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { JobFormProps, UserRole, Client, Booking, EditingJob } from '../../types';
+import { JobFormProps, UserRole, EditingJob } from '../../types';
 
 const JobForm: React.FC<JobFormProps> = ({ job, bookings, staff, clients, statuses, onSave, onCancel }) => {
     const [bookingId, setBookingId] = useState('');
@@ -7,10 +7,14 @@ const JobForm: React.FC<JobFormProps> = ({ job, bookings, staff, clients, status
     const [statusId, setStatusId] = useState('');
     const [driveFolderUrl, setDriveFolderUrl] = useState('');
     const [priority, setPriority] = useState<EditingJob['priority']>('Normal');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     
     const editors = staff.filter(s => s.role === UserRole.Editor || s.role === UserRole.Admin);
 
     useEffect(() => {
+        setError(null);
+        setIsSubmitting(false);
         if (job) {
             setBookingId(job.bookingId);
             setEditorId(job.editorId);
@@ -26,7 +30,7 @@ const JobForm: React.FC<JobFormProps> = ({ job, bookings, staff, clients, status
         }
     }, [job, statuses]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!bookingId) {
             alert('Please select a booking.');
@@ -37,7 +41,16 @@ const JobForm: React.FC<JobFormProps> = ({ job, bookings, staff, clients, status
             alert('Could not find the selected booking details.');
             return;
         }
-        onSave({ id: job?.id, bookingId, clientId: selectedBooking.clientId, editorId, statusId, driveFolderUrl, priority });
+        try {
+            setError(null);
+            setIsSubmitting(true);
+            await onSave({ id: job?.id, bookingId, clientId: selectedBooking.clientId, editorId, statusId, driveFolderUrl, priority });
+        } catch (err) {
+            console.error('Failed to save editing job', err);
+            setError('Unable to save editing job. Please try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const selectedBooking = bookings.find(b => b.id === bookingId);
@@ -202,11 +215,15 @@ const JobForm: React.FC<JobFormProps> = ({ job, bookings, staff, clients, status
                 </button>
                 <button
                     type="submit"
-                    className="py-2 px-4 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors"
+                    disabled={isSubmitting}
+                    className={`py-2 px-4 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors ${isSubmitting ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
-                    Save Job
+                    {isSubmitting ? 'Saving...' : 'Save Job'}
                 </button>
             </div>
+            {error && (
+                <p className="text-sm text-red-400 text-right">{error}</p>
+            )}
         </form>
     );
 };

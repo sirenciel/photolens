@@ -3,24 +3,26 @@ import { EditingJob, EditingStatus, KanbanViewProps } from '../../types';
 import StatusBadge from './StatusBadge';
 import { WhatsAppIcon, GoogleDriveIcon, UrgentIcon, HighPriorityIcon } from '../../constants';
 
-const KanbanCard: React.FC<{ 
+const KanbanCard: React.FC<{
     job: EditingJob;
     statuses: EditingStatus[];
-    onDragStart: (e: React.DragEvent<HTMLDivElement>, jobId: string) => void; 
+    onDragStart: (e: React.DragEvent<HTMLDivElement>, jobId: string) => void;
     onViewJob: (job: EditingJob) => void;
     onViewClient: (clientId: string) => void;
-    onNotifyClient: (jobId: string) => void;
-    onRequestRevision: (job: EditingJob) => void;
-}> = ({ job, statuses, onDragStart, onViewJob, onViewClient, onNotifyClient, onRequestRevision }) => {
+    onNotifyClient: (jobId: string) => Promise<void> | void;
+    onRequestRevision: (job: EditingJob) => Promise<void> | void;
+    isUpdatingStatus: boolean;
+    isNotifyingClient: boolean;
+}> = ({ job, statuses, onDragStart, onViewJob, onViewClient, onNotifyClient, onRequestRevision, isUpdatingStatus, isNotifyingClient }) => {
     
     const handleClientClick = (e: React.MouseEvent) => {
         e.stopPropagation(); // Prevent card's onViewJob from firing
         onViewClient(job.clientId);
     };
     
-    const handleNotifyClick = (e: React.MouseEvent) => {
+    const handleNotifyClick = async (e: React.MouseEvent) => {
         e.stopPropagation();
-        onNotifyClient(job.id);
+        await onNotifyClient(job.id);
     };
     
     const handleDriveClick = (e: React.MouseEvent) => {
@@ -33,10 +35,14 @@ const KanbanCard: React.FC<{
 
     return (
         <div
-            draggable
-            onDragStart={(e) => onDragStart(e, job.id)}
+            draggable={!isUpdatingStatus}
+            onDragStart={(e) => {
+                if (!isUpdatingStatus) {
+                    onDragStart(e, job.id);
+                }
+            }}
             onClick={() => onViewJob(job)}
-            className="bg-slate-800 p-3 rounded-lg shadow-md cursor-grab active:cursor-grabbing mb-3 border-l-4 border-cyan-500 hover:bg-slate-700"
+            className={`bg-slate-800 p-3 rounded-lg shadow-md ${isUpdatingStatus ? 'cursor-wait opacity-70' : 'cursor-grab active:cursor-grabbing'} mb-3 border-l-4 border-cyan-500 hover:bg-slate-700`}
         >
             <div className="flex justify-between items-start">
                 <div className="flex items-center gap-1.5">
@@ -59,16 +65,17 @@ const KanbanCard: React.FC<{
             <p className="text-xs text-slate-400 mb-2 font-mono">{job.bookingId}</p>
             {isReviewStatus && (
                  <div className="flex items-center space-x-2 mb-2">
-                    <button 
+                    <button
                         onClick={handleNotifyClick}
-                        className="w-full text-left text-xs py-1 px-2 rounded-md bg-green-500/20 text-green-300 hover:bg-green-500 hover:text-white transition-colors flex items-center"
+                        disabled={isNotifyingClient}
+                        className={`w-full text-left text-xs py-1 px-2 rounded-md bg-green-500/20 text-green-300 hover:bg-green-500 hover:text-white transition-colors flex items-center ${isNotifyingClient ? 'opacity-60 cursor-not-allowed' : ''}`}
                         title="Notify client for review via WhatsApp"
                     >
-                        <WhatsAppIcon className="h-4 w-4 mr-1.5" />
-                        Notify (WA)
+                        <WhatsAppIcon className={`h-4 w-4 mr-1.5 ${isNotifyingClient ? 'animate-spin' : ''}`} />
+                        {isNotifyingClient ? 'Notifying…' : 'Notify (WA)'}
                     </button>
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onRequestRevision(job); }}
+                    <button
+                        onClick={async (e) => { e.stopPropagation(); await onRequestRevision(job); }}
                         className="w-full text-left text-xs py-1 px-2 rounded-md bg-purple-500/20 text-purple-300 hover:bg-purple-500 hover:text-white transition-colors flex items-center"
                         title="Request a revision for this job"
                     >
@@ -103,10 +110,12 @@ const KanbanColumn: React.FC<{
     onDrop: (e: React.DragEvent<HTMLDivElement>, statusId: string) => void;
     onViewJob: (job: EditingJob) => void;
     onViewClient: (clientId: string) => void;
-    onNotifyClient: (jobId: string) => void;
-    onRequestRevision: (job: EditingJob) => void;
+    onNotifyClient: (jobId: string) => Promise<void> | void;
+    onRequestRevision: (job: EditingJob) => Promise<void> | void;
     isOver: boolean;
-}> = ({ status, jobs, statuses, onDragStart, onDrop, onViewJob, onViewClient, onNotifyClient, onRequestRevision, isOver }) => {
+    statusUpdatingJobId: string | null;
+    notifyingJobId: string | null;
+}> = ({ status, jobs, statuses, onDragStart, onDrop, onViewJob, onViewClient, onNotifyClient, onRequestRevision, isOver, statusUpdatingJobId, notifyingJobId }) => {
     const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => e.preventDefault();
 
     return (
@@ -117,7 +126,18 @@ const KanbanColumn: React.FC<{
             <h3 className="font-bold text-slate-200 mb-4 px-2 tracking-wider">{status.name} ({jobs.length})</h3>
             <div className="h-full overflow-y-auto pr-1">
                 {jobs.map(job => (
-                    <KanbanCard key={job.id} job={job} statuses={statuses} onDragStart={onDragStart} onViewJob={onViewJob} onViewClient={onViewClient} onNotifyClient={onNotifyClient} onRequestRevision={onRequestRevision} />
+                    <KanbanCard
+                        key={job.id}
+                        job={job}
+                        statuses={statuses}
+                        onDragStart={onDragStart}
+                        onViewJob={onViewJob}
+                        onViewClient={onViewClient}
+                        onNotifyClient={onNotifyClient}
+                        onRequestRevision={onRequestRevision}
+                        isUpdatingStatus={statusUpdatingJobId === job.id}
+                        isNotifyingClient={notifyingJobId === job.id}
+                    />
                 ))}
             </div>
         </div>
@@ -127,18 +147,25 @@ const KanbanColumn: React.FC<{
 const KanbanView: React.FC<KanbanViewProps> = ({ jobs, statuses, onUpdateStatus, onViewJob, onViewClient, onNotifyClient, onRequestRevision }) => {
     const [draggedJobId, setDraggedJobId] = useState<string | null>(null);
     const [dragOverStatusId, setDragOverStatusId] = useState<string | null>(null);
+    const [statusUpdatingJobId, setStatusUpdatingJobId] = useState<string | null>(null);
+    const [notifyingJobId, setNotifyingJobId] = useState<string | null>(null);
 
     const handleDragStart = (e: React.DragEvent<HTMLDivElement>, jobId: string) => {
         setDraggedJobId(jobId);
         e.dataTransfer.effectAllowed = 'move';
     };
 
-    const handleDrop = (e: React.DragEvent<HTMLDivElement>, statusId: string) => {
+    const handleDrop = async (e: React.DragEvent<HTMLDivElement>, statusId: string) => {
         e.preventDefault();
         if (draggedJobId) {
             const job = jobs.find(a => a.id === draggedJobId);
             if (job && job.statusId !== statusId) {
-                 onUpdateStatus(draggedJobId, statusId);
+                try {
+                    setStatusUpdatingJobId(job.id);
+                    await onUpdateStatus(draggedJobId, statusId);
+                } finally {
+                    setStatusUpdatingJobId(null);
+                }
             }
         }
         setDraggedJobId(null);
@@ -150,6 +177,19 @@ const KanbanView: React.FC<KanbanViewProps> = ({ jobs, statuses, onUpdateStatus,
         setDragOverStatusId(null);
     }
 
+    const handleNotify = async (jobId: string) => {
+        try {
+            setNotifyingJobId(jobId);
+            await onNotifyClient(jobId);
+        } finally {
+            setNotifyingJobId(null);
+        }
+    };
+
+    const handleRequestRevision = async (job: EditingJob) => {
+        await onRequestRevision(job);
+    };
+
     const jobsByStatus = statuses.reduce((acc, status) => {
         acc[status.id] = jobs.filter(j => j.statusId === status.id);
         return acc;
@@ -158,8 +198,8 @@ const KanbanView: React.FC<KanbanViewProps> = ({ jobs, statuses, onUpdateStatus,
     return (
         <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-5 h-[calc(100vh-22rem)]`} onDragEnd={handleDragEnd}>
             {statuses.map(status => (
-                <div 
-                    key={status.id} 
+                <div
+                    key={status.id}
                     onDragEnter={() => setDragOverStatusId(status.id)}
                 >
                     <KanbanColumn
@@ -170,9 +210,11 @@ const KanbanView: React.FC<KanbanViewProps> = ({ jobs, statuses, onUpdateStatus,
                         onDrop={handleDrop}
                         onViewJob={onViewJob}
                         onViewClient={onViewClient}
-                        onNotifyClient={onNotifyClient}
-                        onRequestRevision={onRequestRevision}
+                        onNotifyClient={handleNotify}
+                        onRequestRevision={handleRequestRevision}
                         isOver={dragOverStatusId === status.id}
+                        statusUpdatingJobId={statusUpdatingJobId}
+                        notifyingJobId={notifyingJobId}
                     />
                 </div>
             ))}

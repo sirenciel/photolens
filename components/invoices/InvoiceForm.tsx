@@ -77,13 +77,13 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, bookings, clients, s
         }
     };
     
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!bookingId || !clientId) {
             alert('Please select a booking.');
             return;
         }
-        onSave({
+        await onSave({
             id: invoice?.id,
             bookingId,
             clientId,

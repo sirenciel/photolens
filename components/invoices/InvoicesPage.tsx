@@ -64,14 +64,14 @@ const InvoicesPage: React.FC<InvoicesPageProps> = ({ invoices, bookings, clients
         setIsFormModalOpen(true);
     };
 
-    const handleSave = (invoiceData: Omit<Invoice, 'id' | 'clientName' | 'clientAvatarUrl' | 'amount' | 'amountPaid' | 'payments'> & { id?: string }) => {
-        onSaveInvoice(invoiceData);
+    const handleSave = async (invoiceData: Omit<Invoice, 'id' | 'clientName' | 'clientAvatarUrl' | 'amount' | 'amountPaid' | 'payments'> & { id?: string }) => {
+        await onSaveInvoice(invoiceData);
         setIsFormModalOpen(false);
     };
 
-    const handleDelete = (invoiceId: string) => {
+    const handleDelete = async (invoiceId: string) => {
         if (window.confirm('Are you sure you want to delete this invoice? This will mark the associated booking as uninvoiced.')) {
-            onDeleteInvoice(invoiceId);
+            await onDeleteInvoice(invoiceId);
         }
     };
     
@@ -121,9 +121,9 @@ const InvoicesPage: React.FC<InvoicesPageProps> = ({ invoices, bookings, clients
         setIsPaymentModalOpen(true);
     };
 
-    const handleSavePayment = (paymentData: Omit<Payment, 'id' | 'recordedBy'>) => {
+    const handleSavePayment = async (paymentData: Omit<Payment, 'id' | 'recordedBy'>) => {
         if (invoiceForPayment) {
-            onRecordPayment(invoiceForPayment.id, paymentData);
+            await onRecordPayment(invoiceForPayment.id, paymentData);
         }
         setIsPaymentModalOpen(false);
         setInvoiceForPayment(null);

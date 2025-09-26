@@ -33,10 +33,11 @@ const EditingWorkflowPage: React.FC<EditingWorkflowPageProps> = ({
 
     const [isRevisionModalOpen, setIsRevisionModalOpen] = useState(false);
     const [jobForRevision, setJobForRevision] = useState<EditingJob | null>(null);
+    const [revisionSaving, setRevisionSaving] = useState(false);
 
     const canManageEditing = hasPermission(currentUser.role, Permission.MANAGE_EDITING);
 
-     useEffect(() => {
+    useEffect(() => {
         if (initialFilters?.status) setStatusFilter(initialFilters.status);
         if (initialFilters?.clientId) setClientFilter(initialFilters.clientId);
     }, [initialFilters]);
@@ -92,28 +93,52 @@ const EditingWorkflowPage: React.FC<EditingWorkflowPageProps> = ({
         setIsModalOpen(true);
     };
     
-    const handleSave = (jobData: Omit<EditingJob, 'id' | 'clientName' | 'editorName' | 'editorAvatarUrl' | 'uploadDate'> & { id?: string }) => {
-        onSaveJob(jobData);
-        setIsModalOpen(false);
+    const handleSave = async (jobData: Omit<EditingJob, 'id' | 'clientName' | 'editorName' | 'editorAvatarUrl' | 'uploadDate'> & { id?: string }) => {
+        try {
+            await onSaveJob(jobData);
+            setIsModalOpen(false);
+            setEditingJob(null);
+        } catch (error) {
+            console.error('Failed to save editing job', error);
+            alert('Unable to save editing job. Please try again.');
+        }
     };
 
-    const handleDelete = (jobId: string) => {
-        if (window.confirm('Are you sure you want to delete this editing job?')) {
-            onDeleteJob(jobId);
+    const handleDelete = async (jobId: string) => {
+        if (!window.confirm('Are you sure you want to delete this editing job?')) {
+            return;
+        }
+
+        try {
+            await onDeleteJob(jobId);
+        } catch (error) {
+            console.error('Failed to delete editing job', error);
+            alert('Unable to delete editing job. Please try again.');
         }
     };
 
     const handleOpenRevisionModal = (job: EditingJob) => {
         setJobForRevision(job);
         setIsRevisionModalOpen(true);
+        return Promise.resolve();
     };
 
-    const handleSaveRevision = (notes: string) => {
-        if (jobForRevision) {
-            onRequestRevision(jobForRevision.id, notes);
+    const handleSaveRevision = async (notes: string) => {
+        if (!jobForRevision) {
+            return;
         }
-        setIsRevisionModalOpen(false);
-        setJobForRevision(null);
+
+        try {
+            setRevisionSaving(true);
+            await onRequestRevision(jobForRevision.id, notes);
+            setIsRevisionModalOpen(false);
+            setJobForRevision(null);
+        } catch (error) {
+            console.error('Failed to request revision', error);
+            alert('Unable to request revision. Please try again.');
+        } finally {
+            setRevisionSaving(false);
+        }
     };
 
 
@@ -213,6 +238,7 @@ const EditingWorkflowPage: React.FC<EditingWorkflowPageProps> = ({
                     <RevisionNotesModal
                         onSave={handleSaveRevision}
                         onClose={() => setIsRevisionModalOpen(false)}
+                        isSaving={revisionSaving}
                     />
                 </Modal>
             )}

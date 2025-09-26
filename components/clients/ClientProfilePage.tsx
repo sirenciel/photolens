@@ -44,17 +44,17 @@ const FinancialStatusBadge: React.FC<{ status?: ClientFinancialStatus }> = ({ st
 const PhotoSelectionManager: React.FC<{
     booking: Booking;
     canManage: boolean;
-    onAdd: (bookingId: string, selectionName: string) => void;
-    onRemove: (bookingId: string, selectionName: string) => void;
-    onFinalize: (bookingId: string) => void;
+    onAdd: (bookingId: string, selectionName: string) => Promise<void>;
+    onRemove: (bookingId: string, selectionName: string) => Promise<void>;
+    onFinalize: (bookingId: string) => Promise<void>;
     isFinalizeEnabled: boolean;
 }> = ({ booking, canManage, onAdd, onRemove, onFinalize, isFinalizeEnabled }) => {
     const [newSelection, setNewSelection] = useState('');
 
-    const handleAddSelection = (e: React.FormEvent) => {
+    const handleAddSelection = async (e: React.FormEvent) => {
         e.preventDefault();
         if (newSelection.trim()) {
-            onAdd(booking.id, newSelection.trim());
+            await onAdd(booking.id, newSelection.trim());
             setNewSelection('');
         }
     };
@@ -79,7 +79,7 @@ const PhotoSelectionManager: React.FC<{
                         <li key={index} className="flex justify-between items-center p-2 rounded-md bg-slate-800">
                             <span className="font-mono text-slate-200 text-sm">{selection.name}</span>
                             {canManage && (
-                                <button onClick={() => onRemove(booking.id, selection.name)} className="text-slate-500 hover:text-red-400" title="Remove selection">
+                                <button onClick={async () => await onRemove(booking.id, selection.name)} className="text-slate-500 hover:text-red-400" title="Remove selection">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
                                 </button>
                             )}
@@ -93,7 +93,7 @@ const PhotoSelectionManager: React.FC<{
                 <div className="mt-4 pt-4 border-t border-slate-700 flex justify-end">
                     <div className="relative group">
                         <button
-                            onClick={() => onFinalize(booking.id)}
+                            onClick={async () => await onFinalize(booking.id)}
                             disabled={!isFinalizeEnabled}
                             className="flex items-center py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors text-sm disabled:bg-slate-600 disabled:cursor-not-allowed"
                         >
@@ -147,19 +147,19 @@ const ClientProfilePage: React.FC<ClientProfilePageProps> = ({
         setNotes(client.notes || '');
     }, [client.notes]);
     
-    const handleSaveNotes = () => {
-        onSaveNotes(client.id, notes);
+    const handleSaveNotes = async () => {
+        await onSaveNotes(client.id, notes);
         alert('Notes saved!');
     };
-    
-    const handleSaveClient = (clientData: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => {
-        onSaveClient(clientData);
+
+    const handleSaveClient = async (clientData: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => {
+        await onSaveClient(clientData);
         setIsEditModalOpen(false);
     };
 
-    const handleDelete = () => {
+    const handleDelete = async () => {
         if (window.confirm(`Are you sure you want to delete ${client.name}? This will also delete their associated bookings and invoices. This action cannot be undone.`)) {
-            onDeleteClient(client.id);
+            await onDeleteClient(client.id);
         }
     };
     
