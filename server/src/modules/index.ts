@@ -1,0 +1,10 @@
+export { clientRouter } from './clients';
+export { staffRouter } from './staff';
+export { sessionCategoryRouter } from './session-categories';
+export { sessionPackageRouter } from './session-packages';
+export { paymentAccountRouter } from './payment-accounts';
+export { expenseRouter } from './expenses';
+export { editingStatusRouter } from './editing-statuses';
+export { editingJobRouter } from './editing-jobs';
+export { bookingRouter } from './bookings';
+export { invoiceRouter } from './invoices';
