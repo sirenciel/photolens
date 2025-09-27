@@ -13,7 +13,45 @@ import SettingsPage from './components/settings/SettingsPage';
 import ClientProfilePage from './components/clients/ClientProfilePage';
 import InvoicePreviewModal from './components/invoices/InvoicePreviewModal';
 import { mockBookings, mockClients, mockInvoices, mockEditingJobs, mockStaff, mockActivities, mockRevenueData, mockPandLData, mockSessionRevenue, mockSessionTypes, mockEditingStatuses, mockExpenses, mockPaymentAccounts, mockSettings } from './services/mockData';
-import { Client, Booking, StaffMember, Invoice, SessionCategory, SessionPackage, EditingJob, Permission, UserRole, EditingStatus, PhotoSelection, Activity, Payment, Expense, InvoiceItem, PaymentAccount, ClientFinancialStatus, AppSettings } from './types';
+import {
+  fetchBootstrapData,
+  createClient as apiCreateClient,
+  updateClient as apiUpdateClient,
+  deleteClient as apiDeleteClient,
+  updateClientNotes as apiUpdateClientNotes,
+  createBooking as apiCreateBooking,
+  updateBooking as apiUpdateBooking,
+  deleteBooking as apiDeleteBooking,
+  createInvoice as apiCreateInvoice,
+  updateInvoice as apiUpdateInvoice,
+  deleteInvoice as apiDeleteInvoice,
+  recordInvoicePayment as apiRecordInvoicePayment,
+  createExpense as apiCreateExpense,
+  updateExpense as apiUpdateExpense,
+  deleteExpense as apiDeleteExpense,
+  markExpenseAsBilled as apiMarkExpenseAsBilled,
+  createEditingJob as apiCreateEditingJob,
+  updateEditingJob as apiUpdateEditingJob,
+  deleteEditingJob as apiDeleteEditingJob,
+  updateEditingJobStatus as apiUpdateEditingJobStatus,
+  createStaff as apiCreateStaff,
+  updateStaff as apiUpdateStaff,
+  deleteStaff as apiDeleteStaff,
+  createSessionCategory as apiCreateSessionCategory,
+  updateSessionCategory as apiUpdateSessionCategory,
+  deleteSessionCategory as apiDeleteSessionCategory,
+  createSessionPackage as apiCreateSessionPackage,
+  updateSessionPackage as apiUpdateSessionPackage,
+  deleteSessionPackage as apiDeleteSessionPackage,
+  createEditingStatus as apiCreateEditingStatus,
+  updateEditingStatus as apiUpdateEditingStatus,
+  deleteEditingStatus as apiDeleteEditingStatus,
+  createPaymentAccount as apiCreatePaymentAccount,
+  updatePaymentAccount as apiUpdatePaymentAccount,
+  deletePaymentAccount as apiDeletePaymentAccount,
+  saveSettings as apiSaveSettings,
+} from './services/api';
+import { Client, Booking, StaffMember, Invoice, SessionCategory, SessionPackage, EditingJob, Permission, UserRole, EditingStatus, PhotoSelection, Activity, Payment, Expense, InvoiceItem, PaymentAccount, ClientFinancialStatus, AppSettings, RevenueData, PandLData, SessionRevenue } from './types';
 import { hasPermission, PAGE_PERMISSIONS } from './services/permissions';
 
 const App: React.FC = () => {
@@ -26,23 +64,95 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<StaffMember>(mockStaff[0]); // Default to Owner
 
   // Centralized state management
-  const [clients, setClients] = useState(mockClients);
-  const [bookings, setBookings] = useState(mockBookings);
-  const [invoices, setInvoices] = useState(mockInvoices);
-  const [editingJobs, setEditingJobs] = useState(mockEditingJobs);
-  const [staff, setStaff] = useState(mockStaff);
-  const [sessionTypes, setSessionTypes] = useState(mockSessionTypes);
-  const [editingStatuses, setEditingStatuses] = useState(mockEditingStatuses);
-  const [activities, setActivities] = useState(mockActivities);
-  const [expenses, setExpenses] = useState(mockExpenses);
-  const [revenueData, setRevenueData] = useState(mockRevenueData);
-  const [pandLData, setPandLData] = useState(mockPandLData);
-  const [sessionRevenue, setSessionRevenue] = useState(mockSessionRevenue);
-  const [paymentAccounts, setPaymentAccounts] = useState(mockPaymentAccounts);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [editingJobs, setEditingJobs] = useState<EditingJob[]>([]);
+  const [staff, setStaff] = useState<StaffMember[]>([mockStaff[0]]);
+  const [sessionTypes, setSessionTypes] = useState<SessionCategory[]>([]);
+  const [editingStatuses, setEditingStatuses] = useState<EditingStatus[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
+  const [pandLData, setPandLData] = useState<PandLData[]>([]);
+  const [sessionRevenue, setSessionRevenue] = useState<SessionRevenue[]>([]);
+  const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([]);
   const [appSettings, setAppSettings] = useState<AppSettings>(mockSettings);
+
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
 
   // Global Invoice Preview Modal State
   const [previewData, setPreviewData] = useState<{ invoice: Invoice | null; client: Client | null; type: 'invoice' | 'receipt' }>({ invoice: null, client: null, type: 'invoice' });
+
+  const reportApiError = (message: string) => (error: unknown) => {
+    console.error(message, error);
+    setBootstrapError(error instanceof Error ? error.message : message);
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadData = async () => {
+      try {
+        const data = await fetchBootstrapData();
+        if (!isMounted) return;
+
+        setClients(data.clients);
+        setBookings(data.bookings);
+        setInvoices(data.invoices);
+        setEditingJobs(data.editingJobs);
+        setActivities(data.activities);
+        setExpenses(data.expenses);
+        setRevenueData(data.revenueData);
+        setPandLData(data.pandLData);
+        setSessionRevenue(data.sessionRevenue);
+        setPaymentAccounts(data.paymentAccounts);
+        setSessionTypes(data.sessionTypes.length ? data.sessionTypes : mockSessionTypes);
+        setEditingStatuses(data.editingStatuses.length ? data.editingStatuses : mockEditingStatuses);
+
+        const resolvedStaff = data.staff.length ? data.staff : mockStaff;
+        setStaff(resolvedStaff);
+        setCurrentUser(prev => {
+          const existing = resolvedStaff.find(member => member.id === prev.id);
+          return existing || resolvedStaff[0];
+        });
+
+        setAppSettings(data.settings ?? mockSettings);
+        setBootstrapError(null);
+      } catch (error) {
+        console.error('Failed to load data from API. Falling back to mock data.', error);
+        if (!isMounted) return;
+
+        setBootstrapError(error instanceof Error ? error.message : 'Unknown error');
+        setClients(mockClients);
+        setBookings(mockBookings);
+        setInvoices(mockInvoices);
+        setEditingJobs(mockEditingJobs);
+        setActivities(mockActivities);
+        setExpenses(mockExpenses);
+        setRevenueData(mockRevenueData);
+        setPandLData(mockPandLData);
+        setSessionRevenue(mockSessionRevenue);
+        setPaymentAccounts(mockPaymentAccounts);
+        setSessionTypes(mockSessionTypes);
+        setEditingStatuses(mockEditingStatuses);
+        setStaff(mockStaff);
+        setCurrentUser(mockStaff[0]);
+        setAppSettings(mockSettings);
+      } finally {
+        if (isMounted) {
+          setIsBootstrapping(false);
+        }
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
     // Automated Invoice Reminder Logic
     useEffect(() => {
@@ -150,25 +260,36 @@ const App: React.FC = () => {
 
   const handleSaveClient = (clientToSave: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }): Client | void => {
     if (clientToSave.id) {
-      // Update existing client
-      setClients(clients.map(c => c.id === clientToSave.id ? { ...c, ...clientToSave } : c));
+      setClients(prev => prev.map(c => c.id === clientToSave.id ? { ...c, ...clientToSave } : c));
+      void apiUpdateClient(clientToSave.id, clientToSave).then(updated => {
+        setClients(prev => prev.map(c => c.id === updated.id ? updated : c));
+      }).catch(reportApiError('Failed to update client on server'));
     } else {
-      // Add new client
+      const tempId = `C${Date.now()}`;
       const newClient: Client = {
         ...clientToSave,
-        id: `C${String(clients.length + 1).padStart(3, '0')}`,
+        id: tempId,
         joinDate: new Date(),
         totalBookings: 0,
         totalSpent: 0,
         avatarUrl: `https://picsum.photos/seed/new-client-${clients.length + 1}/100/100`
       };
-      setClients([newClient, ...clients]);
+      setClients(prev => [newClient, ...prev]);
+
+      void apiCreateClient(clientToSave).then(created => {
+        setClients(prev => prev.map(c => c.id === tempId ? created : c));
+      }).catch(error => {
+        setClients(prev => prev.filter(c => c.id !== tempId));
+        reportApiError('Failed to create client on server')(error);
+      });
+
       return newClient;
     }
   };
-  
+
   const handleSaveClientNotes = (clientId: string, notes: string) => {
-    setClients(clients.map(c => c.id === clientId ? { ...c, notes } : c));
+    setClients(prev => prev.map(c => c.id === clientId ? { ...c, notes } : c));
+    void apiUpdateClientNotes(clientId, notes).catch(reportApiError('Failed to update client notes on server'));
   };
 
   const handleDeleteClient = (clientId: string) => {
@@ -179,7 +300,9 @@ const App: React.FC = () => {
     setBookings(updatedBookings);
     setInvoices(updatedInvoices);
     setEditingJobs(updatedEditingJobs);
-    setClients(clients.filter(c => c.id !== clientId));
+    setClients(prev => prev.filter(c => c.id !== clientId));
+
+    void apiDeleteClient(clientId).catch(reportApiError('Failed to delete client on server'));
 
     setSelectedClientId(null); // Go back to the list view after deleting
   };
@@ -196,32 +319,30 @@ const App: React.FC = () => {
     const wasCompleted = bookingToSave.id ? bookings.find(b => b.id === bookingToSave.id)?.status === 'Completed' : false;
 
     if (bookingToSave.id) {
-        // Update existing booking
         updatedBookings = bookings.map(b => {
             if (b.id === bookingToSave.id) {
                 const client = clients.find(c => c.id === bookingToSave.clientId);
                 const photographer = staff.find(s => s.id === bookingToSave.photographerId);
-                const updatedBooking = { 
-                    ...b, 
+                const updatedBooking = {
+                    ...b,
                     ...bookingToSave,
                     clientName: client?.name || 'N/A',
                     clientAvatarUrl: client?.avatarUrl || '',
                     photographer: photographer?.name || 'N/A',
                     sessionType: getSessionTypeName(),
                 };
-                 savedBooking = updatedBooking;
-                 return updatedBooking;
+                savedBooking = updatedBooking;
+                return updatedBooking;
             }
             return b;
         });
         setBookings(updatedBookings);
     } else {
-        // Add new booking
         const client = clients.find(c => c.id === bookingToSave.clientId);
         const photographer = staff.find(s => s.id === bookingToSave.photographerId);
         const newBooking: Booking = {
             ...bookingToSave,
-            id: `B${String(bookings.length + 1).padStart(3, '0')}`,
+            id: `B${Date.now()}`,
             clientName: client?.name || 'N/A',
             clientAvatarUrl: client?.avatarUrl || `https://picsum.photos/seed/${bookingToSave.clientId}/100/100`,
             photographer: photographer?.name || 'N/A',
@@ -265,6 +386,20 @@ const App: React.FC = () => {
 
     // Update client stats
     if (savedBooking) {
+        if (bookingToSave.id) {
+            void apiUpdateBooking(savedBooking.id, savedBooking).catch(reportApiError('Failed to update booking on server'));
+        } else {
+            const tempId = savedBooking.id;
+            const payload: Partial<Booking> = { ...savedBooking };
+            delete (payload as any).id;
+            void apiCreateBooking(payload).then(created => {
+                setBookings(prev => prev.map(b => b.id === tempId ? created : b));
+            }).catch(error => {
+                setBookings(prev => prev.filter(b => b.id !== tempId));
+                reportApiError('Failed to create booking on server')(error);
+            });
+        }
+
         updateClientStats(savedBooking.clientId, updatedBookings, invoices);
         return savedBooking;
     }
@@ -300,25 +435,37 @@ const App: React.FC = () => {
       }
       const updatedBookings = bookings.filter(b => b.id !== bookingId);
       setBookings(updatedBookings);
-      
+
       // Update client stats after booking deletion
       updateClientStats(clientId, updatedBookings, updatedInvoices);
+
+      void apiDeleteBooking(bookingId).catch(reportApiError('Failed to delete booking on server'));
   };
 
   const handleSaveStaff = (staffToSave: Omit<StaffMember, 'id' | 'status' | 'lastLogin' | 'avatarUrl'> & { id?: string }) => {
     if (staffToSave.id) {
         // Update existing staff
-        setStaff(staff.map(s => s.id === staffToSave.id ? { ...s, ...staffToSave } : s));
+        setStaff(prev => prev.map(s => s.id === staffToSave.id ? { ...s, ...staffToSave } : s));
+        void apiUpdateStaff(staffToSave.id, staffToSave).catch(reportApiError('Failed to update staff member on server'));
     } else {
         // Add new staff
         const newStaff: StaffMember = {
             ...staffToSave,
-            id: `S${String(staff.length + 1).padStart(3, '0')}`,
+            id: `S${Date.now()}`,
             status: 'Invited',
             lastLogin: new Date(), // This would be null in a real app until first login
             avatarUrl: `https://picsum.photos/seed/new-staff-${staff.length + 1}/100/100`,
         };
-        setStaff([newStaff, ...staff]);
+        setStaff(prev => [newStaff, ...prev]);
+
+        const payload: Partial<StaffMember> = { ...newStaff };
+        delete (payload as any).id;
+        void apiCreateStaff(payload).then(created => {
+            setStaff(prev => prev.map(s => s.id === newStaff.id ? created : s));
+        }).catch(error => {
+            setStaff(prev => prev.filter(s => s.id !== newStaff.id));
+            reportApiError('Failed to invite staff member on server')(error);
+        });
     }
   };
 
@@ -327,8 +474,9 @@ const App: React.FC = () => {
       setBookings(prev => prev.map(b => b.photographerId === staffId ? { ...b, photographerId: '', photographer: 'Unassigned' } : b));
       // Un-assign from any editing jobs
       setEditingJobs(prev => prev.map(job => job.editorId === staffId ? { ...job, editorId: null, editorName: 'Unassigned', editorAvatarUrl: 'https://picsum.photos/seed/user-unassigned/100/100' } : job));
-      
-      setStaff(staff.filter(s => s.id !== staffId));
+
+      setStaff(prev => prev.filter(s => s.id !== staffId));
+      void apiDeleteStaff(staffId).catch(reportApiError('Failed to delete staff member on server'));
   };
 
   const handleSaveInvoice = (invoiceToSave: Omit<Invoice, 'id' | 'clientName' | 'clientAvatarUrl' | 'amount' | 'amountPaid' | 'payments' | 'lastReminderSent'> & { id?: string }) => {
@@ -340,10 +488,9 @@ const App: React.FC = () => {
     let updatedInvoices: Invoice[];
 
     if (invoiceToSave.id) {
-        // Update existing invoice
         const existingInvoice = invoices.find(i => i.id === invoiceToSave.id);
-        updatedInvoices = invoices.map(i => i.id === invoiceToSave.id ? { 
-            ...i, 
+        updatedInvoices = invoices.map(i => i.id === invoiceToSave.id ? {
+            ...i,
             ...invoiceToSave,
             amount: totalAmount,
             clientName: client.name,
@@ -353,8 +500,12 @@ const App: React.FC = () => {
             lastReminderSent: existingInvoice?.lastReminderSent,
         } : i);
         setInvoices(updatedInvoices);
+
+        const payload = updatedInvoices.find(i => i.id === invoiceToSave.id);
+        if (payload) {
+            void apiUpdateInvoice(payload.id, payload).catch(reportApiError('Failed to update invoice on server'));
+        }
     } else {
-        // Add new invoice
         const newInvoiceId = `${appSettings.invoiceSettings.prefix}${String(invoices.length + 1).padStart(3, '0')}`;
         const newInvoice: Invoice = {
             ...invoiceToSave,
@@ -368,10 +519,19 @@ const App: React.FC = () => {
         };
         updatedInvoices = [newInvoice, ...invoices];
         setInvoices(updatedInvoices);
-        // Link invoice to booking
         setBookings(bookings.map(b => b.id === invoiceToSave.bookingId ? { ...b, invoiceId: newInvoiceId } : b));
+
+        const payload: Partial<Invoice> = { ...newInvoice };
+        delete (payload as any).id;
+        void apiCreateInvoice(payload).then(created => {
+            setInvoices(prev => prev.map(inv => inv.id === newInvoiceId ? created : inv));
+            setBookings(prev => prev.map(b => b.id === created.bookingId ? { ...b, invoiceId: created.id } : b));
+        }).catch(error => {
+            setInvoices(prev => prev.filter(inv => inv.id !== newInvoiceId));
+            setBookings(prev => prev.map(b => b.invoiceId === newInvoiceId ? { ...b, invoiceId: '-' } : b));
+            reportApiError('Failed to create invoice on server')(error);
+        });
     }
-     // Update client stats
      updateClientStats(invoiceToSave.clientId, bookings, updatedInvoices);
   };
 
@@ -384,9 +544,11 @@ const App: React.FC = () => {
     // Delete invoice
     const updatedInvoices = invoices.filter(i => i.id !== invoiceId);
     setInvoices(updatedInvoices);
-    
+
     // Update client stats
     updateClientStats(invoiceToDelete.clientId, bookings, updatedInvoices);
+
+    void apiDeleteInvoice(invoiceId).catch(reportApiError('Failed to delete invoice on server'));
   };
 
   const handleCreateInvoiceFromBooking = (bookingId: string): Invoice | void => {
@@ -454,6 +616,17 @@ const App: React.FC = () => {
     // Update client stats
     updateClientStats(newInvoice.clientId, bookings, updatedInvoices);
 
+    const payload: Partial<Invoice> = { ...newInvoice };
+    delete (payload as any).id;
+    void apiCreateInvoice(payload).then(created => {
+        setInvoices(prev => prev.map(inv => inv.id === newInvoiceId ? created : inv));
+        setBookings(prev => prev.map(b => b.id === created.bookingId ? { ...b, invoiceId: created.id } : b));
+    }).catch(error => {
+        setInvoices(prev => prev.filter(inv => inv.id !== newInvoiceId));
+        setBookings(prev => prev.map(b => b.invoiceId === newInvoiceId ? { ...b, invoiceId: '-' } : b));
+        reportApiError('Failed to create invoice from booking on server')(error);
+    });
+
     return newInvoice;
   };
 
@@ -497,22 +670,36 @@ const App: React.FC = () => {
 
     // Update client stats
     updateClientStats(invoiceToUpdate.clientId, bookings, updatedInvoices);
+
+    void apiRecordInvoicePayment(invoiceId, paymentData).then(updated => {
+        setInvoices(prev => prev.map(inv => inv.id === updated.id ? updated : inv));
+    }).catch(reportApiError('Failed to record payment on server'));
   };
 
     const handleSaveExpense = (expenseToSave: Omit<Expense, 'id'> & { id?: string }) => {
         if (expenseToSave.id) {
-            setExpenses(expenses.map(e => e.id === expenseToSave.id ? { ...e, ...expenseToSave } : e));
+            setExpenses(prev => prev.map(e => e.id === expenseToSave.id ? { ...e, ...expenseToSave } : e));
+            void apiUpdateExpense(expenseToSave.id, expenseToSave).catch(reportApiError('Failed to update expense on server'));
         } else {
             const newExpense: Expense = {
                 ...expenseToSave,
                 id: `E${Date.now()}`,
             };
-            setExpenses([newExpense, ...expenses]);
+            setExpenses(prev => [newExpense, ...prev]);
+
+            const payload: Omit<Expense, 'id'> = { ...expenseToSave };
+            void apiCreateExpense(payload).then(created => {
+                setExpenses(prev => prev.map(e => e.id === newExpense.id ? created : e));
+            }).catch(error => {
+                setExpenses(prev => prev.filter(e => e.id !== newExpense.id));
+                reportApiError('Failed to create expense on server')(error);
+            });
         }
     };
 
     const handleDeleteExpense = (expenseId: string) => {
-        setExpenses(expenses.filter(e => e.id !== expenseId));
+        setExpenses(prev => prev.filter(e => e.id !== expenseId));
+        void apiDeleteExpense(expenseId).catch(reportApiError('Failed to delete expense on server'));
     };
 
     const handleBillExpense = (expenseId: string) => {
@@ -578,6 +765,8 @@ const App: React.FC = () => {
     
         setInvoices(updatedInvoices);
         setExpenses(updatedExpenses);
+
+        void apiMarkExpenseAsBilled(expenseId, invoice.id).catch(reportApiError('Failed to mark expense as billed on server'));
     
         const newActivity: Activity = {
             id: `A${Date.now()}`,
@@ -596,31 +785,41 @@ const App: React.FC = () => {
 
   const handleSaveSessionCategory = (categoryToSave: Omit<SessionCategory, 'packages'> & { id?: string }) => {
     if (categoryToSave.id) {
-        setSessionTypes(sessionTypes.map(st => st.id === categoryToSave.id ? { ...st, name: categoryToSave.name } : st));
+        setSessionTypes(prev => prev.map(st => st.id === categoryToSave.id ? { ...st, name: categoryToSave.name } : st));
+        void apiUpdateSessionCategory(categoryToSave.id, { name: categoryToSave.name }).catch(reportApiError('Failed to update session category on server'));
     } else {
         const newCategory: SessionCategory = {
             id: `SC${Date.now()}`,
             name: categoryToSave.name,
             packages: [],
         };
-        setSessionTypes([...sessionTypes, newCategory]);
+        setSessionTypes(prev => [...prev, newCategory]);
+
+        void apiCreateSessionCategory({ name: newCategory.name, packages: [] }).then(created => {
+            setSessionTypes(prev => prev.map(st => st.id === newCategory.id ? created : st));
+        }).catch(error => {
+            setSessionTypes(prev => prev.filter(st => st.id !== newCategory.id));
+            reportApiError('Failed to create session category on server')(error);
+        });
     }
   };
-  
+
   const handleDeleteSessionCategory = (categoryId: string) => {
     if (bookings.some(b => b.sessionCategoryId === categoryId)) {
         alert("Cannot delete category. It is currently used in one or more bookings.");
         return;
     }
-    setSessionTypes(sessionTypes.filter(st => st.id !== categoryId));
+    setSessionTypes(prev => prev.filter(st => st.id !== categoryId));
+    void apiDeleteSessionCategory(categoryId).catch(reportApiError('Failed to delete session category on server'));
   };
 
   const handleSaveSessionPackage = (categoryId: string, packageToSave: Omit<SessionPackage, 'id'> & { id?: string }) => {
-    setSessionTypes(sessionTypes.map(st => {
+    setSessionTypes(prev => prev.map(st => {
         if (st.id === categoryId) {
             if (packageToSave.id) {
                 // Update existing package
                 const updatedPackages = st.packages.map(p => p.id === packageToSave.id ? { ...p, ...packageToSave } : p);
+                void apiUpdateSessionPackage(categoryId, packageToSave.id, packageToSave).catch(reportApiError('Failed to update session package on server'));
                 return { ...st, packages: updatedPackages };
             } else {
                 // Add new package
@@ -628,6 +827,19 @@ const App: React.FC = () => {
                     ...packageToSave,
                     id: `SP${Date.now()}`,
                 };
+                void apiCreateSessionPackage(categoryId, packageToSave).then(created => {
+                    setSessionTypes(innerPrev => innerPrev.map(innerSt => {
+                        if (innerSt.id !== categoryId) return innerSt;
+                        const packages = innerSt.packages.map(pkg => pkg.id === newPackage.id ? created : pkg);
+                        return { ...innerSt, packages };
+                    }));
+                }).catch(error => {
+                    setSessionTypes(innerPrev => innerPrev.map(innerSt => {
+                        if (innerSt.id !== categoryId) return innerSt;
+                        return { ...innerSt, packages: innerSt.packages.filter(pkg => pkg.id !== newPackage.id) };
+                    }));
+                    reportApiError('Failed to create session package on server')(error);
+                });
                 return { ...st, packages: [...st.packages, newPackage] };
             }
         }
@@ -640,13 +852,14 @@ const App: React.FC = () => {
         alert("Cannot delete package. It is currently used in one or more bookings.");
         return;
     }
-    setSessionTypes(sessionTypes.map(st => {
+    setSessionTypes(prev => prev.map(st => {
         if (st.id === categoryId) {
             const updatedPackages = st.packages.filter(p => p.id !== packageId);
             return { ...st, packages: updatedPackages };
         }
         return st;
     }));
+    void apiDeleteSessionPackage(categoryId, packageId).catch(reportApiError('Failed to delete session package on server'));
   };
   
     const handleSaveEditingJob = (jobToSave: Omit<EditingJob, 'id' | 'clientName' | 'editorName' | 'editorAvatarUrl' | 'uploadDate'> & { id?: string }) => {
@@ -654,36 +867,40 @@ const App: React.FC = () => {
             const editor = staff.find(s => s.id === editorId);
             return editor ? { name: editor.name, avatarUrl: editor.avatarUrl } : { name: 'Unassigned', avatarUrl: 'https://picsum.photos/seed/user-unassigned/100/100' };
         }
-        
+
         const getClientInfo = (bookingId: string) => {
             const booking = bookings.find(b => b.id === bookingId);
             return booking ? { clientName: booking.clientName, clientId: booking.clientId } : { clientName: 'N/A', clientId: '' };
         }
 
         if (jobToSave.id) {
-            // Update existing asset
-            setEditingJobs(editingJobs.map(job => {
+            let updatedJob: EditingJob | undefined;
+            setEditingJobs(prev => prev.map(job => {
                 if (job.id === jobToSave.id) {
                     const editorInfo = getEditorInfo(jobToSave.editorId);
                     const clientInfo = getClientInfo(jobToSave.bookingId);
-                    return {
+                    updatedJob = {
                         ...job,
                         ...jobToSave,
                         editorName: editorInfo.name,
                         editorAvatarUrl: editorInfo.avatarUrl,
                         clientName: clientInfo.clientName,
                         clientId: clientInfo.clientId,
-                    }
+                    };
+                    return updatedJob!;
                 }
                 return job;
             }));
+
+            if (updatedJob) {
+                void apiUpdateEditingJob(updatedJob.id, updatedJob).catch(reportApiError('Failed to update editing job on server'));
+            }
         } else {
-            // Add new asset
             const editorInfo = getEditorInfo(jobToSave.editorId);
             const clientInfo = getClientInfo(jobToSave.bookingId);
             const newJob: EditingJob = {
                 ...jobToSave,
-                id: `M${String(editingJobs.length + 1).padStart(3, '0')}`,
+                id: `M${Date.now()}`,
                 clientName: clientInfo.clientName,
                 clientId: clientInfo.clientId,
                 editorName: editorInfo.name,
@@ -692,16 +909,37 @@ const App: React.FC = () => {
                 revisionCount: 0,
                 revisionNotes: [],
             };
-            setEditingJobs([newJob, ...editingJobs]);
+            setEditingJobs(prev => [newJob, ...prev]);
+
+            const payload: Partial<EditingJob> = { ...newJob };
+            delete (payload as any).id;
+            void apiCreateEditingJob(payload).then(created => {
+                setEditingJobs(prev => prev.map(job => job.id === newJob.id ? created : job));
+            }).catch(error => {
+                setEditingJobs(prev => prev.filter(job => job.id !== newJob.id));
+                reportApiError('Failed to create editing job on server')(error);
+            });
         }
     };
 
     const handleDeleteEditingJob = (jobId: string) => {
-        setEditingJobs(editingJobs.filter(job => job.id !== jobId));
+        setEditingJobs(prev => prev.filter(job => job.id !== jobId));
+        void apiDeleteEditingJob(jobId).catch(reportApiError('Failed to delete editing job on server'));
     };
 
     const handleUpdateEditingJobStatus = (jobId: string, newStatusId: string) => {
-        setEditingJobs(editingJobs.map(job => job.id === jobId ? { ...job, statusId: newStatusId } : job));
+        let updatedJob: EditingJob | undefined;
+        setEditingJobs(prev => prev.map(job => {
+            if (job.id === jobId) {
+                updatedJob = { ...job, statusId: newStatusId };
+                return updatedJob;
+            }
+            return job;
+        }));
+
+        if (updatedJob) {
+            void apiUpdateEditingJobStatus(jobId, newStatusId).catch(reportApiError('Failed to update editing job status on server'));
+        }
     };
 
     const handleRequestRevision = (jobId: string, notes: string) => {
@@ -712,6 +950,7 @@ const App: React.FC = () => {
             return;
         }
 
+        let updatedJob: EditingJob | undefined;
         setEditingJobs(prevJobs => prevJobs.map(job => {
             if (job.id === jobId) {
                 const newRevisionNotes = [
@@ -719,12 +958,14 @@ const App: React.FC = () => {
                     { note: notes, date: new Date() }
                 ];
                 const newRevisionCount = (job.revisionCount || 0) + 1;
-                return {
+                const revisedJob = {
                     ...job,
                     statusId: inProgressStatus.id,
                     revisionCount: newRevisionCount,
                     revisionNotes: newRevisionNotes,
                 };
+                updatedJob = revisedJob;
+                return revisedJob;
             }
             return job;
         }));
@@ -739,6 +980,10 @@ const App: React.FC = () => {
             timestamp: new Date(),
         };
         setActivities(prev => [newActivity, ...prev]);
+
+        if (updatedJob) {
+            void apiUpdateEditingJob(jobId, updatedJob).catch(reportApiError('Failed to update editing job after revision request on server'));
+        }
     };
 
     const handleNotifyClientForReview = (jobId: string) => {
@@ -781,23 +1026,32 @@ const App: React.FC = () => {
 
     const handleSaveEditingStatus = (statusToSave: Omit<EditingStatus, 'id'> & {id?: string}) => {
         if (statusToSave.id) {
-            setEditingStatuses(editingStatuses.map(s => s.id === statusToSave.id ? { ...s, ...statusToSave } : s));
+            setEditingStatuses(prev => prev.map(s => s.id === statusToSave.id ? { ...s, ...statusToSave } : s));
+            void apiUpdateEditingStatus(statusToSave.id, statusToSave).catch(reportApiError('Failed to update editing status on server'));
         } else {
             const newStatus: EditingStatus = {
                 ...statusToSave,
                 id: `status-${Date.now()}`,
             };
-            setEditingStatuses([...editingStatuses, newStatus]);
+            setEditingStatuses(prev => [...prev, newStatus]);
+
+            void apiCreateEditingStatus(statusToSave).then(created => {
+                setEditingStatuses(prev => prev.map(status => status.id === newStatus.id ? created : status));
+            }).catch(error => {
+                setEditingStatuses(prev => prev.filter(status => status.id !== newStatus.id));
+                reportApiError('Failed to create editing status on server')(error);
+            });
         }
     };
-    
+
     const handleDeleteEditingStatus = (statusId: string) => {
         // You might want to add logic here to prevent deleting a status that's in use
         if (editingJobs.some(job => job.statusId === statusId)) {
             alert("Cannot delete a status that is currently in use by an editing job.");
             return;
         }
-        setEditingStatuses(editingStatuses.filter(s => s.id !== statusId));
+        setEditingStatuses(prev => prev.filter(s => s.id !== statusId));
+        void apiDeleteEditingStatus(statusId).catch(reportApiError('Failed to delete editing status on server'));
     };
 
     const handleAddPhotoSelection = (bookingId: string, selectionName: string) => {
@@ -887,13 +1141,21 @@ const App: React.FC = () => {
 
     const handleSavePaymentAccount = (accountToSave: Omit<PaymentAccount, 'id'> & { id?: string }) => {
         if (accountToSave.id) {
-            setPaymentAccounts(paymentAccounts.map(acc => acc.id === accountToSave.id ? { ...acc, ...accountToSave } : acc));
+            setPaymentAccounts(prev => prev.map(acc => acc.id === accountToSave.id ? { ...acc, ...accountToSave } : acc));
+            void apiUpdatePaymentAccount(accountToSave.id, accountToSave).catch(reportApiError('Failed to update payment account on server'));
         } else {
             const newAccount: PaymentAccount = {
                 ...accountToSave,
                 id: `PA${Date.now()}`,
             };
-            setPaymentAccounts([...paymentAccounts, newAccount]);
+            setPaymentAccounts(prev => [...prev, newAccount]);
+
+            void apiCreatePaymentAccount(accountToSave).then(created => {
+                setPaymentAccounts(prev => prev.map(acc => acc.id === newAccount.id ? created : acc));
+            }).catch(error => {
+                setPaymentAccounts(prev => prev.filter(acc => acc.id !== newAccount.id));
+                reportApiError('Failed to create payment account on server')(error);
+            });
         }
     };
 
@@ -906,12 +1168,15 @@ const App: React.FC = () => {
             alert("Cannot delete an account that has expenses recorded from it.");
             return;
         }
-        setPaymentAccounts(paymentAccounts.filter(acc => acc.id !== accountId));
+        setPaymentAccounts(prev => prev.filter(acc => acc.id !== accountId));
+        void apiDeletePaymentAccount(accountId).catch(reportApiError('Failed to delete payment account on server'));
     };
 
     const handleSaveSettings = (settings: AppSettings) => {
         setAppSettings(settings);
-        // Here you would typically also make an API call to save settings to a backend.
+        void apiSaveSettings(settings).then(updated => {
+            setAppSettings(updated);
+        }).catch(reportApiError('Failed to save settings on server'));
     };
 
 
@@ -1122,6 +1387,19 @@ const App: React.FC = () => {
     }
   };
 
+  if (isBootstrapping) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-900 text-slate-100 font-sans">
+        <div className="text-center space-y-2">
+          <div className="text-lg font-semibold">Loading workspace…</div>
+          {bootstrapError && (
+            <p className="text-sm text-red-300">{bootstrapError}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-slate-900 text-slate-100 font-sans">
       <Sidebar 
@@ -1139,6 +1417,11 @@ const App: React.FC = () => {
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-900 p-4 sm:p-8">
+          {bootstrapError && (
+            <div className="mb-4 rounded-lg border border-red-500/60 bg-red-500/10 p-4 text-sm text-red-200">
+              Unable to reach the API. Showing local fallback data. Error: {bootstrapError}
+            </div>
+          )}
           {renderContent()}
         </main>
       </div>
