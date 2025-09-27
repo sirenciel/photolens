@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -13,6 +13,7 @@ import SettingsPage from './components/settings/SettingsPage';
 import ClientProfilePage from './components/clients/ClientProfilePage';
 import InvoicePreviewModal from './components/invoices/InvoicePreviewModal';
 import { mockBookings, mockClients, mockInvoices, mockEditingJobs, mockStaff, mockActivities, mockRevenueData, mockPandLData, mockSessionRevenue, mockSessionTypes, mockEditingStatuses, mockExpenses, mockPaymentAccounts, mockSettings } from './services/mockData';
+import { fetchAppState, persistAppState, AppStatePayload } from './services/api';
 import { Client, Booking, StaffMember, Invoice, SessionCategory, SessionPackage, EditingJob, Permission, UserRole, EditingStatus, PhotoSelection, Activity, Payment, Expense, InvoiceItem, PaymentAccount, ClientFinancialStatus, AppSettings } from './types';
 import { hasPermission, PAGE_PERMISSIONS } from './services/permissions';
 
@@ -40,9 +41,108 @@ const App: React.FC = () => {
   const [sessionRevenue, setSessionRevenue] = useState(mockSessionRevenue);
   const [paymentAccounts, setPaymentAccounts] = useState(mockPaymentAccounts);
   const [appSettings, setAppSettings] = useState<AppSettings>(mockSettings);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Global Invoice Preview Modal State
   const [previewData, setPreviewData] = useState<{ invoice: Invoice | null; client: Client | null; type: 'invoice' | 'receipt' }>({ invoice: null, client: null, type: 'invoice' });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadState = async () => {
+      try {
+        const state = await fetchAppState();
+        if (!isMounted) {
+          return;
+        }
+
+        setClients(state.clients);
+        setBookings(state.bookings);
+        setInvoices(state.invoices);
+        setEditingJobs(state.editingJobs);
+        setStaff(state.staff);
+        setSessionTypes(state.sessionTypes);
+        setEditingStatuses(state.editingStatuses);
+        setActivities(state.activities);
+        setExpenses(state.expenses);
+        setRevenueData(state.revenueData);
+        setPandLData(state.pandLData);
+        setSessionRevenue(state.sessionRevenue);
+        setPaymentAccounts(state.paymentAccounts);
+        setAppSettings(state.appSettings);
+        setCurrentUser(prev => {
+          if (!state.staff.length) {
+            return prev;
+          }
+
+          const matching = state.staff.find(member => member.id === prev?.id);
+          return matching || state.staff[0];
+        });
+        setIsOfflineMode(false);
+      } catch (error) {
+        console.warn('Falling back to mock data because backend state could not be loaded.', error);
+        if (!isMounted) {
+          return;
+        }
+
+        setClients(mockClients);
+        setBookings(mockBookings);
+        setInvoices(mockInvoices);
+        setEditingJobs(mockEditingJobs);
+        setStaff(mockStaff);
+        setSessionTypes(mockSessionTypes);
+        setEditingStatuses(mockEditingStatuses);
+        setActivities(mockActivities);
+        setExpenses(mockExpenses);
+        setRevenueData(mockRevenueData);
+        setPandLData(mockPandLData);
+        setSessionRevenue(mockSessionRevenue);
+        setPaymentAccounts(mockPaymentAccounts);
+        setAppSettings(mockSettings);
+        setCurrentUser(mockStaff[0]);
+        setIsOfflineMode(true);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isLoading || isOfflineMode) {
+      return;
+    }
+
+    const snapshot: AppStatePayload = {
+      clients,
+      bookings,
+      invoices,
+      editingJobs,
+      staff,
+      sessionTypes,
+      editingStatuses,
+      activities,
+      expenses,
+      revenueData,
+      pandLData,
+      sessionRevenue,
+      paymentAccounts,
+      appSettings,
+    };
+
+    persistAppState(snapshot).catch(error => {
+      console.error('Failed to persist application state:', error);
+      setIsOfflineMode(true);
+    });
+  }, [activities, appSettings, bookings, clients, editingJobs, editingStatuses, expenses, invoices, isLoading, isOfflineMode, pandLData, paymentAccounts, revenueData, sessionRevenue, sessionTypes, staff]);
 
     // Automated Invoice Reminder Logic
     useEffect(() => {
@@ -132,21 +232,28 @@ const App: React.FC = () => {
   };
 
 
-  const updateClientStats = (clientId: string, updatedBookings: Booking[], updatedInvoices: Invoice[]) => {
-    setClients(prevClients => prevClients.map(c => {
+  const updateClientStats = useCallback((clientId: string, updatedBookings: Booking[], updatedInvoices: Invoice[]) => {
+    let nextClients: Client[] = clients;
+    setClients(prevClients => {
+      nextClients = prevClients.map(c => {
         if (c.id === clientId) {
-            const clientBookings = updatedBookings.filter(b => b.clientId === clientId);
-            const clientInvoices = updatedInvoices.filter(inv => inv.clientId === clientId);
-            const totalSpent = clientInvoices.reduce((sum, inv) => sum + inv.amountPaid, 0);
-            return {
-                ...c,
-                totalBookings: clientBookings.length,
-                totalSpent: totalSpent,
-            };
+          const clientBookings = updatedBookings.filter(b => b.clientId === clientId);
+          const clientInvoices = updatedInvoices.filter(inv => inv.clientId === clientId);
+          const totalSpent = clientInvoices.reduce((sum, inv) => sum + inv.amountPaid, 0);
+          return {
+            ...c,
+            totalBookings: clientBookings.length,
+            totalSpent: totalSpent,
+          };
         }
         return c;
-    }));
-  };
+      });
+
+      return nextClients;
+    });
+
+    return nextClients;
+  }, [clients]);
 
   const handleSaveClient = (clientToSave: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }): Client | void => {
     if (clientToSave.id) {
@@ -1122,22 +1229,40 @@ const App: React.FC = () => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-200">
+        <div className="text-center space-y-2">
+          <p className="text-lg font-semibold">Loading data...</p>
+          {isOfflineMode && (
+            <p className="text-sm text-slate-400">Backend tidak tersedia, menggunakan data lokal.</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-slate-900 text-slate-100 font-sans">
-      <Sidebar 
-        activePage={activePage} 
-        setActivePage={handlePageChange} 
-        currentUser={currentUser} 
+      <Sidebar
+        activePage={activePage}
+        setActivePage={handlePageChange}
+        currentUser={currentUser}
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header 
-          currentUser={currentUser} 
-          allStaff={staff} 
+        <Header
+          currentUser={currentUser}
+          allStaff={staff}
           onUserChange={handleUserChange}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />
+        {isOfflineMode && (
+          <div className="bg-amber-500 text-slate-900 text-center text-sm font-medium py-2 px-4">
+            Backend tidak dapat dijangkau. Perubahan hanya tersimpan secara lokal sampai server aktif kembali dan aplikasi dimuat ulang.
+          </div>
+        )}
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-900 p-4 sm:p-8">
           {renderContent()}
         </main>
