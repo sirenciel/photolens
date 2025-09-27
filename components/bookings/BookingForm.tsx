@@ -82,8 +82,8 @@ const BookingForm: React.FC<BookingFormProps> = ({ booking, clients, staff, sess
         setSessionPackageId(''); // Reset package selection when category changes
     }
 
-    const handleSaveNewClient = (clientData: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => {
-        const newClient = onSaveClient(clientData);
+    const handleSaveNewClient = async (clientData: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => {
+        const newClient = await onSaveClient(clientData);
         if (newClient) {
             setClientId(newClient.id); // Auto-select the new client
         }

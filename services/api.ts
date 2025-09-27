@@ -95,6 +95,8 @@ export interface AppStatePayload {
   appSettings: AppSettings;
 }
 
+type ClientMutationPayload = Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string };
+
 const parseDate = (value?: IsoDate | null): Date | null => {
   if (!value) {
     return null;
@@ -175,6 +177,28 @@ const serializeAppState = (state: AppStatePayload): RawAppState => (
   ) as RawAppState
 );
 
+const serializeClientMutation = (client: ClientMutationPayload): Record<string, unknown> => {
+  const payload: Record<string, unknown> = {
+    name: client.name,
+    email: client.email,
+    phone: client.phone,
+  };
+
+  if (client.avatarUrl !== undefined) {
+    payload.avatarUrl = client.avatarUrl;
+  }
+
+  if (client.notes !== undefined) {
+    payload.notes = client.notes;
+  }
+
+  if (client.financialStatus !== undefined) {
+    payload.financialStatus = client.financialStatus;
+  }
+
+  return payload;
+};
+
 export const fetchAppState = async (): Promise<AppStatePayload> => {
   const response = await fetch(`${API_BASE_URL}/state`, {
     headers: {
@@ -203,4 +227,56 @@ export const persistAppState = async (state: AppStatePayload): Promise<void> => 
   if (!response.ok) {
     throw new Error(`Failed to persist application state: ${response.status}`);
   }
+};
+
+export const createClient = async (client: ClientMutationPayload): Promise<Client> => {
+  const response = await fetch(`${API_BASE_URL}/clients`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(serializeClientMutation(client)),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to create client: ${response.status}`);
+  }
+
+  const raw = (await response.json()) as RawClient;
+  return deserializeClient(raw);
+};
+
+export const updateClient = async (client: ClientMutationPayload & { id: string }): Promise<Client> => {
+  const response = await fetch(`${API_BASE_URL}/clients/${client.id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(serializeClientMutation(client)),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to update client: ${response.status}`);
+  }
+
+  const raw = (await response.json()) as RawClient;
+  return deserializeClient(raw);
+};
+
+export const deleteClient = async (clientId: string): Promise<AppStatePayload> => {
+  const response = await fetch(`${API_BASE_URL}/clients/${clientId}`, {
+    method: 'DELETE',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete client: ${response.status}`);
+  }
+
+  const raw = (await response.json()) as RawAppState;
+  return deserializeAppState(raw);
 };
