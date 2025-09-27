@@ -1,0 +1,911 @@
+{
+  "clients": [
+    {
+      "id": "C001",
+      "name": "Olivia Chen",
+      "email": "olivia.chen@example.com",
+      "phone": "555-0101",
+      "avatarUrl": "https://picsum.photos/seed/client-olivia/100/100",
+      "joinDate": "2023-01-15T00:00:00.000Z",
+      "totalBookings": 2,
+      "totalSpent": 7000,
+      "notes": "Prefers morning light for shoots. Allergic to peanuts - ensure catering is safe.",
+      "financialStatus": "Good Standing"
+    },
+    {
+      "id": "C002",
+      "name": "Benjamin Carter",
+      "email": "ben.carter@example.com",
+      "phone": "555-0102",
+      "avatarUrl": "https://picsum.photos/seed/client-ben/100/100",
+      "joinDate": "2023-02-20T00:00:00.000Z",
+      "totalBookings": 1,
+      "totalSpent": 750,
+      "notes": "Very specific about headshot angles. Likes the left side of his face more.",
+      "financialStatus": "Good Standing"
+    },
+    {
+      "id": "C003",
+      "name": "Sophia Rodriguez",
+      "email": "sophia.r@example.com",
+      "phone": "555-0103",
+      "avatarUrl": "https://picsum.photos/seed/client-sophia/100/100",
+      "joinDate": "2023-03-10T00:00:00.000Z",
+      "totalBookings": 1,
+      "totalSpent": 1500,
+      "financialStatus": "High Value"
+    },
+    {
+      "id": "C004",
+      "name": "Liam Goldberg",
+      "email": "liam.goldberg@example.com",
+      "phone": "555-0104",
+      "avatarUrl": "https://picsum.photos/seed/client-liam/100/100",
+      "joinDate": "2023-04-05T00:00:00.000Z",
+      "totalBookings": 1,
+      "totalSpent": 1200,
+      "financialStatus": "Good Standing"
+    },
+    {
+      "id": "C005",
+      "name": "Ava Nguyen",
+      "email": "ava.nguyen@example.com",
+      "phone": "555-0105",
+      "avatarUrl": "https://picsum.photos/seed/client-ava/100/100",
+      "joinDate": "2022-11-12T00:00:00.000Z",
+      "totalBookings": 3,
+      "totalSpent": 2850,
+      "financialStatus": "Good Standing"
+    },
+    {
+      "id": "C006",
+      "name": "Noah Martinez",
+      "email": "noah.m@example.com",
+      "phone": "555-0106",
+      "avatarUrl": "https://picsum.photos/seed/client-noah/100/100",
+      "joinDate": "2022-10-01T00:00:00.000Z",
+      "totalBookings": 2,
+      "totalSpent": 4200,
+      "notes": "Follow up for their anniversary shoot next year.",
+      "financialStatus": "Good Standing"
+    },
+    {
+      "id": "C007",
+      "name": "Isabella Kim",
+      "email": "isabella.kim@example.com",
+      "phone": "555-0107",
+      "avatarUrl": "https://picsum.photos/seed/client-isabella/100/100",
+      "joinDate": "2023-05-21T00:00:00.000Z",
+      "totalBookings": 1,
+      "totalSpent": 950,
+      "financialStatus": "Good Standing"
+    },
+    {
+      "id": "C008",
+      "name": "Ethan Williams",
+      "email": "ethan.w@example.com",
+      "phone": "555-0108",
+      "avatarUrl": "https://picsum.photos/seed/client-ethan/100/100",
+      "joinDate": "2022-09-18T00:00:00.000Z",
+      "totalBookings": 4,
+      "totalSpent": 8300,
+      "financialStatus": "High Value"
+    }
+  ],
+  "staff": [
+    {
+      "id": "S001",
+      "name": "Alex Wolfe",
+      "email": "alex.wolfe@lensledger.com",
+      "avatarUrl": "https://picsum.photos/seed/user-alex/100/100",
+      "role": "Owner",
+      "status": "Active",
+      "lastLogin": "2025-01-10T09:00:00.000Z"
+    },
+    {
+      "id": "S002",
+      "name": "Jane Doe",
+      "email": "jane.doe@lensledger.com",
+      "avatarUrl": "https://picsum.photos/seed/user-jane/100/100",
+      "role": "Admin",
+      "status": "Active",
+      "lastLogin": "2025-01-09T16:00:00.000Z"
+    },
+    {
+      "id": "S003",
+      "name": "John Smith",
+      "email": "john.smith@lensledger.com",
+      "avatarUrl": "https://picsum.photos/seed/user-john/100/100",
+      "role": "Photographer",
+      "status": "Active",
+      "lastLogin": "2025-01-10T05:00:00.000Z"
+    },
+    {
+      "id": "S004",
+      "name": "Carlos Ray",
+      "email": "carlos.ray@lensledger.com",
+      "avatarUrl": "https://picsum.photos/seed/user-carlos/100/100",
+      "role": "Editor",
+      "status": "Active",
+      "lastLogin": "2025-01-08T12:00:00.000Z"
+    },
+    {
+      "id": "S005",
+      "name": "Samantha Bee",
+      "email": "samantha.b@lensledger.com",
+      "avatarUrl": "https://picsum.photos/seed/user-samantha/100/100",
+      "role": "Finance",
+      "status": "Invited",
+      "lastLogin": "2023-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "S006",
+      "name": "Mike Ross",
+      "email": "mike.ross@lensledger.com",
+      "avatarUrl": "https://picsum.photos/seed/user-mike/100/100",
+      "role": "Photographer",
+      "status": "Inactive",
+      "lastLogin": "2024-12-15T00:00:00.000Z"
+    }
+  ],
+  "sessionTypes": [
+    {
+      "id": "SC001",
+      "name": "Wedding",
+      "packages": [
+        {
+          "id": "SP001",
+          "name": "Simply",
+          "price": 3500,
+          "inclusions": [
+            "4 Hours Coverage",
+            "1 Photographer",
+            "150 Edited Photos",
+            "Online Gallery"
+          ]
+        },
+        {
+          "id": "SP002",
+          "name": "Silver",
+          "price": 5000,
+          "inclusions": [
+            "8 Hours Coverage",
+            "2 Photographers",
+            "300 Edited Photos",
+            "Engagement Session",
+            "Online Gallery"
+          ]
+        },
+        {
+          "id": "SP003",
+          "name": "Gold",
+          "price": 7500,
+          "inclusions": [
+            "Full Day Coverage",
+            "2 Photographers",
+            "500+ Edited Photos",
+            "Engagement Session",
+            "12x12 Album",
+            "Online Gallery"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SC002",
+      "name": "Foto Wisuda",
+      "packages": [
+        {
+          "id": "SP004",
+          "name": "Paket Simply",
+          "price": 500,
+          "inclusions": [
+            "1 Hour Session",
+            "10 Edited Photos"
+          ]
+        },
+        {
+          "id": "SP005",
+          "name": "Paket Bronze",
+          "price": 850,
+          "inclusions": [
+            "2 Hour Session",
+            "20 Edited Photos",
+            "1 Canvas Print (16x20)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SC003",
+      "name": "Pas Foto",
+      "packages": [
+        {
+          "id": "SP006",
+          "name": "Setengah Badan",
+          "price": 150,
+          "inclusions": [
+            "15 Minute Session",
+            "3 Edited Photos"
+          ]
+        },
+        {
+          "id": "SP007",
+          "name": "Full Body",
+          "price": 250,
+          "inclusions": [
+            "30 Minute Session",
+            "5 Edited Photos"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SC004",
+      "name": "Portrait",
+      "packages": [
+        {
+          "id": "SP008",
+          "name": "Headshot Session",
+          "price": 750,
+          "inclusions": [
+            "1 Hour Studio Session",
+            "3 Outfits",
+            "5 Retouched Images"
+          ]
+        },
+        {
+          "id": "SP009",
+          "name": "Family Portraits",
+          "price": 1200,
+          "inclusions": [
+            "1.5 Hour Outdoor Session",
+            "Up to 6 people",
+            "40 Edited Photos",
+            "Online Gallery"
+          ]
+        }
+      ]
+    }
+  ],
+  "paymentAccounts": [
+    {
+      "id": "PA001",
+      "name": "BCA Utama",
+      "type": "Bank",
+      "details": "123-456-7890"
+    },
+    {
+      "id": "PA002",
+      "name": "Kas Tunai Studio",
+      "type": "Cash",
+      "details": "Laci kasir fisik"
+    },
+    {
+      "id": "PA003",
+      "name": "GoPay Bisnis",
+      "type": "Digital Wallet"
+    }
+  ],
+  "bookings": [
+    {
+      "id": "B001",
+      "clientId": "C001",
+      "clientName": "Olivia Chen",
+      "clientAvatarUrl": "https://picsum.photos/seed/client-olivia/100/100",
+      "sessionCategoryId": "SC001",
+      "sessionPackageId": "SP001",
+      "sessionType": "Wedding - Simply",
+      "photographerId": "S003",
+      "photographer": "John Smith",
+      "date": "2025-02-14T10:00:00.000Z",
+      "status": "Confirmed",
+      "invoiceId": "INV004",
+      "notes": "Client requested mostly candid shots. Minimal posing.",
+      "location": "Grand Ballroom, 123 Main St, Anytown"
+    },
+    {
+      "id": "B002",
+      "clientId": "C002",
+      "clientName": "Benjamin Carter",
+      "clientAvatarUrl": "https://picsum.photos/seed/client-ben/100/100",
+      "sessionCategoryId": "SC004",
+      "sessionPackageId": "SP008",
+      "sessionType": "Portrait - Headshot Session",
+      "photographerId": "S006",
+      "photographer": "Mike Ross",
+      "date": "2025-02-16T09:00:00.000Z",
+      "status": "Confirmed",
+      "invoiceId": "INV005",
+      "photoSelections": [
+        {
+          "name": "BC_Headshot_003_retouch.tiff",
+          "edited": false
+        }
+      ],
+      "location": "LensLedger Studio A"
+    },
+    {
+      "id": "B003",
+      "clientId": "C003",
+      "clientName": "Sophia Rodriguez",
+      "clientAvatarUrl": "https://picsum.photos/seed/client-sophia/100/100",
+      "sessionCategoryId": "SC002",
+      "sessionPackageId": "SP005",
+      "sessionType": "Foto Wisuda - Paket Bronze",
+      "photographerId": "S001",
+      "photographer": "Alex Wolfe",
+      "date": "2025-02-20T08:00:00.000Z",
+      "status": "Pending",
+      "invoiceId": "-",
+      "location": "City University Campus"
+    },
+    {
+      "id": "B004",
+      "clientId": "C004",
+      "clientName": "Liam Goldberg",
+      "clientAvatarUrl": "https://picsum.photos/seed/client-liam/100/100",
+      "sessionCategoryId": "SC004",
+      "sessionPackageId": "SP009",
+      "sessionType": "Portrait - Family Portraits",
+      "photographerId": "S003",
+      "photographer": "John Smith",
+      "date": "2025-02-22T15:00:00.000Z",
+      "status": "Confirmed",
+      "invoiceId": "INV006",
+      "notes": "Location is at their home, please confirm address on the day of. They have a large dog, friendly but just a heads up.",
+      "location": "456 Oak Avenue, Suburbia"
+    },
+    {
+      "id": "B005",
+      "clientId": "C005",
+      "clientName": "Ava Nguyen",
+      "clientAvatarUrl": "https://picsum.photos/seed/client-ava/100/100",
+      "sessionCategoryId": "SC001",
+      "sessionPackageId": "SP002",
+      "sessionType": "Wedding - Silver",
+      "photographerId": "S002",
+      "photographer": "Jane Doe",
+      "date": "2024-12-01T09:00:00.000Z",
+      "status": "Completed",
+      "invoiceId": "INV002",
+      "photoSelections": [],
+      "location": "The Botanical Gardens"
+    },
+    {
+      "id": "B006",
+      "clientId": "C006",
+      "clientName": "Noah Martinez",
+      "clientAvatarUrl": "https://picsum.photos/seed/client-noah/100/100",
+      "sessionCategoryId": "SC001",
+      "sessionPackageId": "SP003",
+      "sessionType": "Wedding - Gold",
+      "photographerId": "S001",
+      "photographer": "Alex Wolfe",
+      "date": "2024-11-10T09:00:00.000Z",
+      "status": "Completed",
+      "invoiceId": "INV003",
+      "location": "Seaside Resort & Spa"
+    },
+    {
+      "id": "B007",
+      "clientId": "C007",
+      "clientName": "Isabella Kim",
+      "clientAvatarUrl": "https://picsum.photos/seed/client-isabella/100/100",
+      "sessionCategoryId": "SC003",
+      "sessionPackageId": "SP006",
+      "sessionType": "Pas Foto - Setengah Badan",
+      "photographerId": "S003",
+      "photographer": "John Smith",
+      "date": "2025-02-13T07:00:00.000Z",
+      "status": "Cancelled",
+      "invoiceId": "-",
+      "location": "LensLedger Studio B"
+    },
+    {
+      "id": "B008",
+      "clientId": "C008",
+      "clientName": "Ethan Williams",
+      "clientAvatarUrl": "https://picsum.photos/seed/client-ethan/100/100",
+      "sessionCategoryId": "SC004",
+      "sessionPackageId": "SP008",
+      "sessionType": "Portrait - Headshot Session",
+      "photographerId": "S003",
+      "photographer": "John Smith",
+      "date": "2024-11-01T10:00:00.000Z",
+      "status": "Completed",
+      "invoiceId": "INV001",
+      "photoSelections": [
+        {
+          "name": "IMG_4021.jpg",
+          "edited": true
+        },
+        {
+          "name": "IMG_4025.jpg",
+          "edited": true
+        },
+        {
+          "name": "IMG_4130.jpg",
+          "edited": false
+        }
+      ],
+      "location": "Client's Office, Downtown"
+    }
+  ],
+  "invoices": [
+    {
+      "id": "INV001",
+      "bookingId": "B008",
+      "clientId": "C008",
+      "clientName": "Ethan Williams",
+      "clientAvatarUrl": "https://picsum.photos/seed/client-ethan/100/100",
+      "items": [
+        {
+          "id": "item1",
+          "description": "Corporate Headshots Package",
+          "quantity": 1,
+          "price": 2500
+        }
+      ],
+      "amount": 2500,
+      "amountPaid": 1000,
+      "issueDate": "2024-10-28T00:00:00.000Z",
+      "dueDate": "2024-11-25T00:00:00.000Z",
+      "status": "Overdue",
+      "payments": [
+        {
+          "id": "PAY001",
+          "date": "2024-11-05T00:00:00.000Z",
+          "amount": 1000,
+          "accountId": "PA003",
+          "methodNotes": "GoPay",
+          "recordedBy": "Samantha Bee"
+        }
+      ],
+      "lastReminderSent": null
+    },
+    {
+      "id": "INV002",
+      "bookingId": "B005",
+      "clientId": "C005",
+      "clientName": "Ava Nguyen",
+      "clientAvatarUrl": "https://picsum.photos/seed/client-ava/100/100",
+      "items": [
+        {
+          "id": "item1",
+          "description": "Wedding Photography",
+          "quantity": 1,
+          "price": 5000
+        }
+      ],
+      "amount": 5000,
+      "amountPaid": 5000,
+      "issueDate": "2024-11-20T00:00:00.000Z",
+      "dueDate": "2024-12-20T00:00:00.000Z",
+      "status": "Paid",
+      "payments": [
+        {
+          "id": "PAY002",
+          "date": "2024-11-25T00:00:00.000Z",
+          "amount": 5000,
+          "accountId": "PA001",
+          "methodNotes": "Transfer",
+          "recordedBy": "Alex Wolfe"
+        }
+      ],
+      "lastReminderSent": null
+    },
+    {
+      "id": "INV003",
+      "bookingId": "B006",
+      "clientId": "C006",
+      "clientName": "Noah Martinez",
+      "clientAvatarUrl": "https://picsum.photos/seed/client-noah/100/100",
+      "items": [
+        {
+          "id": "item1",
+          "description": "Wedding Photography Gold",
+          "quantity": 1,
+          "price": 7500
+        }
+      ],
+      "amount": 7500,
+      "amountPaid": 7500,
+      "issueDate": "2024-10-01T00:00:00.000Z",
+      "dueDate": "2024-11-01T00:00:00.000Z",
+      "status": "Paid",
+      "payments": [
+        {
+          "id": "PAY003",
+          "date": "2024-10-10T00:00:00.000Z",
+          "amount": 7500,
+          "accountId": "PA002",
+          "methodNotes": "Cash",
+          "recordedBy": "Jane Doe"
+        }
+      ],
+      "lastReminderSent": "2024-10-15T00:00:00.000Z"
+    },
+    {
+      "id": "INV004",
+      "bookingId": "B001",
+      "clientId": "C001",
+      "clientName": "Olivia Chen",
+      "clientAvatarUrl": "https://picsum.photos/seed/client-olivia/100/100",
+      "items": [
+        {
+          "id": "item1",
+          "description": "Wedding Photography",
+          "quantity": 1,
+          "price": 3500
+        }
+      ],
+      "amount": 3500,
+      "amountPaid": 0,
+      "issueDate": "2025-02-01T00:00:00.000Z",
+      "dueDate": "2025-02-28T00:00:00.000Z",
+      "status": "Sent",
+      "payments": [],
+      "lastReminderSent": null
+    },
+    {
+      "id": "INV005",
+      "bookingId": "B002",
+      "clientId": "C002",
+      "clientName": "Benjamin Carter",
+      "clientAvatarUrl": "https://picsum.photos/seed/client-ben/100/100",
+      "items": [
+        {
+          "id": "item1",
+          "description": "Portrait Session",
+          "quantity": 1,
+          "price": 750
+        }
+      ],
+      "amount": 750,
+      "amountPaid": 0,
+      "issueDate": "2025-02-02T00:00:00.000Z",
+      "dueDate": "2025-02-20T00:00:00.000Z",
+      "status": "Sent",
+      "payments": [],
+      "lastReminderSent": null
+    },
+    {
+      "id": "INV006",
+      "bookingId": "B004",
+      "clientId": "C004",
+      "clientName": "Liam Goldberg",
+      "clientAvatarUrl": "https://picsum.photos/seed/client-liam/100/100",
+      "items": [
+        {
+          "id": "item1",
+          "description": "Family Portraits",
+          "quantity": 1,
+          "price": 1000
+        },
+        {
+          "id": "item2",
+          "description": "Canvas Print 24x36",
+          "quantity": 1,
+          "price": 200
+        }
+      ],
+      "amount": 1200,
+      "amountPaid": 0,
+      "issueDate": "2025-02-03T00:00:00.000Z",
+      "dueDate": "2025-03-01T00:00:00.000Z",
+      "status": "Sent",
+      "payments": [],
+      "lastReminderSent": null
+    }
+  ],
+  "editingStatuses": [
+    {
+      "id": "status-0",
+      "name": "Awaiting Selection",
+      "color": "slate"
+    },
+    {
+      "id": "status-1",
+      "name": "Ready for Edit",
+      "color": "yellow"
+    },
+    {
+      "id": "status-2",
+      "name": "In Progress",
+      "color": "blue"
+    },
+    {
+      "id": "status-3",
+      "name": "Client Review",
+      "color": "purple"
+    },
+    {
+      "id": "status-4",
+      "name": "Completed",
+      "color": "green"
+    }
+  ],
+  "editingJobs": [
+    {
+      "id": "M001",
+      "bookingId": "B005",
+      "clientId": "C005",
+      "clientName": "Ava Nguyen",
+      "editorId": "S004",
+      "editorName": "Carlos Ray",
+      "editorAvatarUrl": "https://picsum.photos/seed/user-carlos/100/100",
+      "statusId": "status-4",
+      "uploadDate": "2024-12-10T00:00:00.000Z",
+      "driveFolderUrl": "https://drive.google.com/drive/folders/sample-folder",
+      "photographerNotes": "Client was very happy with the ceremony shots. Focus on the candid moments between the couple during the reception.",
+      "priority": "Normal",
+      "revisionCount": 0,
+      "revisionNotes": []
+    },
+    {
+      "id": "M002",
+      "bookingId": "B006",
+      "clientId": "C006",
+      "clientName": "Noah Martinez",
+      "editorId": "S004",
+      "editorName": "Carlos Ray",
+      "editorAvatarUrl": "https://picsum.photos/seed/user-carlos/100/100",
+      "statusId": "status-4",
+      "uploadDate": "2024-11-20T00:00:00.000Z",
+      "priority": "Normal"
+    },
+    {
+      "id": "M003",
+      "bookingId": "B001",
+      "clientId": "C001",
+      "clientName": "Olivia Chen",
+      "editorId": "S002",
+      "editorName": "Jane Doe",
+      "editorAvatarUrl": "https://picsum.photos/seed/user-jane/100/100",
+      "statusId": "status-3",
+      "uploadDate": "2025-02-05T00:00:00.000Z",
+      "driveFolderUrl": "https://drive.google.com/drive/folders/sample-folder",
+      "priority": "High",
+      "revisionCount": 1,
+      "revisionNotes": [
+        {
+          "note": "Client wants the ceremony photos to be brighter.",
+          "date": "2025-02-06T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "M004",
+      "bookingId": "B002",
+      "clientId": "C002",
+      "clientName": "Benjamin Carter",
+      "editorId": "S004",
+      "editorName": "Carlos Ray",
+      "editorAvatarUrl": "https://picsum.photos/seed/user-carlos/100/100",
+      "statusId": "status-2",
+      "uploadDate": "2025-02-07T00:00:00.000Z",
+      "priority": "Urgent"
+    },
+    {
+      "id": "M005",
+      "bookingId": "B004",
+      "clientId": "C004",
+      "clientName": "Liam Goldberg",
+      "editorId": null,
+      "editorName": "Unassigned",
+      "editorAvatarUrl": "https://picsum.photos/seed/user-unassigned/100/100",
+      "statusId": "status-0",
+      "uploadDate": "2025-02-10T00:00:00.000Z",
+      "priority": "Normal"
+    },
+    {
+      "id": "M006",
+      "bookingId": "B004",
+      "clientId": "C004",
+      "clientName": "Liam Goldberg",
+      "editorId": null,
+      "editorName": "Unassigned",
+      "editorAvatarUrl": "https://picsum.photos/seed/user-unassigned/100/100",
+      "statusId": "status-0",
+      "uploadDate": "2025-02-10T00:00:00.000Z",
+      "priority": "Normal"
+    },
+    {
+      "id": "M007",
+      "bookingId": "B008",
+      "clientId": "C008",
+      "clientName": "Ethan Williams",
+      "editorId": "S002",
+      "editorName": "Jane Doe",
+      "editorAvatarUrl": "https://picsum.photos/seed/user-jane/100/100",
+      "statusId": "status-4",
+      "uploadDate": "2024-11-05T00:00:00.000Z",
+      "driveFolderUrl": "https://drive.google.com/drive/folders/sample-folder",
+      "photographerNotes": "Lighting was a bit harsh in the afternoon. Please check highlights on files IMG_4500 through IMG_4550. Client wants a clean, corporate look.",
+      "priority": "Normal"
+    }
+  ],
+  "activities": [
+    {
+      "id": "A001",
+      "user": "Jane Doe",
+      "userAvatarUrl": "https://picsum.photos/seed/user-jane/100/100",
+      "action": "updated editing job for",
+      "target": "Olivia Chen Wedding",
+      "timestamp": "2025-02-09T10:00:00.000Z"
+    },
+    {
+      "id": "A002",
+      "user": "Alex Wolfe",
+      "userAvatarUrl": "https://picsum.photos/seed/user-alex/100/100",
+      "action": "confirmed booking for",
+      "target": "Benjamin Carter",
+      "timestamp": "2025-02-08T14:00:00.000Z"
+    },
+    {
+      "id": "A003",
+      "user": "Samantha Bee",
+      "userAvatarUrl": "https://picsum.photos/seed/user-samantha/100/100",
+      "action": "marked invoice INV003 as",
+      "target": "Paid",
+      "timestamp": "2025-02-05T00:00:00.000Z"
+    },
+    {
+      "id": "A004",
+      "user": "John Smith",
+      "userAvatarUrl": "https://picsum.photos/seed/user-john/100/100",
+      "action": "added a note to",
+      "target": "Liam Goldberg Booking",
+      "timestamp": "2025-02-03T00:00:00.000Z"
+    }
+  ],
+  "expenses": [
+    {
+      "id": "E001",
+      "category": "Software",
+      "description": "Adobe Creative Cloud",
+      "amount": 59.99,
+      "date": "2024-12-01T00:00:00.000Z",
+      "accountId": "PA001"
+    },
+    {
+      "id": "E002",
+      "category": "Studio",
+      "description": "Studio Rent",
+      "amount": 1500,
+      "date": "2024-12-01T00:00:00.000Z",
+      "accountId": "PA001"
+    },
+    {
+      "id": "E003",
+      "category": "Marketing",
+      "description": "Facebook Ads",
+      "amount": 250,
+      "date": "2024-11-01T00:00:00.000Z",
+      "accountId": "PA001"
+    },
+    {
+      "id": "E004",
+      "category": "Gear",
+      "description": "New Lens Filter for B006",
+      "amount": 120,
+      "date": "2024-11-12T00:00:00.000Z",
+      "accountId": "PA002",
+      "bookingId": "B006"
+    },
+    {
+      "id": "E005",
+      "category": "Travel",
+      "description": "Gas for client shoot B008",
+      "amount": 40,
+      "date": "2024-11-01T00:00:00.000Z",
+      "accountId": "PA002",
+      "bookingId": "B008"
+    },
+    {
+      "id": "E006",
+      "category": "Gear",
+      "description": "Memory Cards",
+      "amount": 85,
+      "date": "2025-01-15T00:00:00.000Z",
+      "accountId": "PA002"
+    }
+  ],
+  "revenueData": [
+    {
+      "month": "Jan",
+      "revenue": 4000
+    },
+    {
+      "month": "Feb",
+      "revenue": 3000
+    },
+    {
+      "month": "Mar",
+      "revenue": 5000
+    },
+    {
+      "month": "Apr",
+      "revenue": 4500
+    },
+    {
+      "month": "May",
+      "revenue": 6000
+    },
+    {
+      "month": "Jun",
+      "revenue": 5500
+    },
+    {
+      "month": "Jul",
+      "revenue": 7200
+    }
+  ],
+  "pandLData": [
+    {
+      "month": "Mar",
+      "revenue": 5000,
+      "expenses": 1800
+    },
+    {
+      "month": "Apr",
+      "revenue": 4500,
+      "expenses": 1950
+    },
+    {
+      "month": "May",
+      "revenue": 6000,
+      "expenses": 2100
+    },
+    {
+      "month": "Jun",
+      "revenue": 5500,
+      "expenses": 1920
+    },
+    {
+      "month": "Jul",
+      "revenue": 7200,
+      "expenses": 2350
+    }
+  ],
+  "sessionRevenue": [
+    {
+      "name": "Wedding",
+      "value": 45000,
+      "id": "SC001"
+    },
+    {
+      "name": "Foto Wisuda",
+      "value": 18500,
+      "id": "SC002"
+    },
+    {
+      "name": "Pas Foto",
+      "value": 22000,
+      "id": "SC003"
+    },
+    {
+      "name": "Portrait",
+      "value": 12000,
+      "id": "SC004"
+    }
+  ],
+  "appSettings": {
+    "companyProfile": {
+      "name": "LensLedger Studios",
+      "address": "123 Photography Lane, Suite 101\nCreativity City, CA 90210",
+      "email": "contact@lensledger.com",
+      "logoUrl": ""
+    },
+    "invoiceSettings": {
+      "prefix": "INV",
+      "defaultDueDays": 14,
+      "footerNotes": "Terima kasih telah menggunakan jasa kami!\nMohon lakukan pembayaran sebelum tanggal jatuh tempo ke Rekening Bank ABC 123-456-7890 a.n. LensLedger Studios."
+    },
+    "automatedReminders": {
+      "enabled": true,
+      "frequencyDays": 7
+    }
+  }
+}
