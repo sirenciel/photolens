@@ -7,12 +7,13 @@ This document tracks how the frontend currently interacts with the lightweight b
 - ✅ **Initial state bootstrap** – the React app now calls `fetchAppState()` during start-up and hydrates the UI with the data served by `GET /api/state`.
 - ✅ **Global persistence** – every change that mutates the in-memory state triggers `persistAppState()`, which serialises the entire application snapshot and stores it via `PUT /api/state` on the Node server.
 - ✅ **Offline awareness** – failures to reach the backend switch the UI into an offline mode that falls back to the bundled mock data.
+- ✅ **Client CRUD API** – client creations and updates now call `POST/PUT /api/clients` through `services/api.ts`, while deletions invoke `DELETE /api/clients/:id` so the backend can own ID generation and cascade related bookings, invoices, and editing jobs.【F:App.tsx†L215-L307】【F:services/api.ts†L200-L266】【F:server/index.js†L18-L214】
 
 ## Still Missing
 
-The bridge only shuttles a JSON snapshot between the browser and the Node process. All domain logic, validation, and relationships continue to live exclusively in the frontend:
+The bridge still relies on the snapshot upload for most domain logic. Significant pieces remain browser-only:
 
-- **Entity CRUD endpoints** – the server exposes only `/api/state`. React components still call helpers such as `handleSaveClient`, `handleSaveBooking`, and `handleSaveInvoice` (all in `App.tsx`), mutate local arrays, and then overwrite the entire state file. There are no RESTful resources like `/clients` or `/bookings`, so the backend cannot enforce constraints or generate IDs.
+- **Booking & invoice endpoints** – only clients hit the backend. Booking creation, invoice generation, payment tracking, and editing job orchestration still mutate local arrays inside React before the whole snapshot is persisted, so the server cannot validate those flows or generate IDs beyond clients.【F:App.tsx†L309-L672】【F:services/api.ts†L18-L266】
 - **Authentication & authorisation** – `currentUser` is selected from the loaded staff list, permissions come from `services/permissions.ts`, and there is no login, token exchange, or server-side role enforcement. Anyone with the URL can read or replace the JSON payload.
 - **Business workflows** – automated invoice reminders, editing job chaining, financial updates, and activity feed entries are executed within React effects and handlers. The backend neither schedules background jobs nor emits domain events.
 - **Files & external services** – properties such as `driveFolderUrl`, proofing galleries, receipt uploads, or WhatsApp notifications are mocked. The server does not manage storage, webhooks, or third-party integrations.

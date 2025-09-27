@@ -245,7 +245,7 @@ export interface BookingsPageProps {
     currentUser: StaffMember;
     onSaveBooking: (booking: Omit<Booking, 'id' | 'clientName' | 'clientAvatarUrl' | 'photographer' | 'invoiceId' | 'sessionType' | 'photoSelections'> & { id?: string }) => Booking | void;
     onDeleteBooking: (bookingId: string) => void;
-    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Client | void;
+    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Promise<Client | void>;
     onViewClient: (clientId: string) => void;
     onPreviewInvoice: (invoiceId: string, type?: 'invoice' | 'receipt') => void;
     onCreateInvoiceFromBooking: (bookingId: string) => Invoice | void;
@@ -263,13 +263,13 @@ export interface BookingFormProps {
     bookings: Booking[];
     onSave: (booking: Omit<Booking, 'id' | 'clientName' | 'clientAvatarUrl' | 'photographer' | 'invoiceId' | 'sessionType' | 'photoSelections'> & { id?: string }) => void;
     onCancel: () => void;
-    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Client | void;
+    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Promise<Client | void>;
 }
 
 export interface ClientsPageProps {
     clients: Client[];
     currentUser: StaffMember;
-    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Client | void;
+    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Promise<Client | void>;
     onDeleteClient: (clientId: string) => void;
     onViewProfile: (clientId: string) => void;
 }
@@ -283,7 +283,7 @@ export interface ClientCardProps {
 
 export interface ClientFormProps {
     client?: Client | null;
-    onSave: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Client | void;
+    onSave: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Promise<Client | void>;
     onCancel: () => void;
 }
 
@@ -297,7 +297,7 @@ export interface ClientProfilePageProps {
     activities: Activity[];
     currentUser: StaffMember;
     onBack: () => void;
-    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Client | void;
+    onSaveClient: (client: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => Promise<Client | void>;
     onDeleteClient: (clientId: string) => void;
     onSaveNotes: (clientId: string, notes: string) => void;
     onAddPhotoSelection: (bookingId: string, selectionName: string) => void;

@@ -13,7 +13,7 @@ import SettingsPage from './components/settings/SettingsPage';
 import ClientProfilePage from './components/clients/ClientProfilePage';
 import InvoicePreviewModal from './components/invoices/InvoicePreviewModal';
 import { mockBookings, mockClients, mockInvoices, mockEditingJobs, mockStaff, mockActivities, mockRevenueData, mockPandLData, mockSessionRevenue, mockSessionTypes, mockEditingStatuses, mockExpenses, mockPaymentAccounts, mockSettings } from './services/mockData';
-import { fetchAppState, persistAppState, AppStatePayload } from './services/api';
+import { fetchAppState, persistAppState, AppStatePayload, createClient, updateClient, deleteClient } from './services/api';
 import { Client, Booking, StaffMember, Invoice, SessionCategory, SessionPackage, EditingJob, Permission, UserRole, EditingStatus, PhotoSelection, Activity, Payment, Expense, InvoiceItem, PaymentAccount, ClientFinancialStatus, AppSettings } from './types';
 import { hasPermission, PAGE_PERMISSIONS } from './services/permissions';
 
@@ -255,41 +255,116 @@ const App: React.FC = () => {
     return nextClients;
   }, [clients]);
 
-  const handleSaveClient = (clientToSave: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }): Client | void => {
-    if (clientToSave.id) {
-      // Update existing client
-      setClients(clients.map(c => c.id === clientToSave.id ? { ...c, ...clientToSave } : c));
-    } else {
-      // Add new client
-      const newClient: Client = {
-        ...clientToSave,
-        id: `C${String(clients.length + 1).padStart(3, '0')}`,
-        joinDate: new Date(),
-        totalBookings: 0,
-        totalSpent: 0,
-        avatarUrl: `https://picsum.photos/seed/new-client-${clients.length + 1}/100/100`
-      };
-      setClients([newClient, ...clients]);
-      return newClient;
+  const handleSaveClient = async (
+    clientToSave: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string },
+  ): Promise<Client | void> => {
+    try {
+      if (clientToSave.id) {
+        const updated = await updateClient(clientToSave);
+        setClients(prev => prev.map(client => (client.id === updated.id ? updated : client)));
+        return updated;
+      }
+
+      const created = await createClient(clientToSave);
+      setClients(prev => [created, ...prev]);
+      return created;
+    } catch (error) {
+      console.error('Falling back to local client persistence after API failure:', error);
+      setIsOfflineMode(true);
+
+      if (clientToSave.id) {
+        let fallbackClient: Client | undefined;
+        setClients(prev => prev.map(client => {
+          if (client.id === clientToSave.id) {
+            fallbackClient = { ...client, ...clientToSave };
+            return fallbackClient;
+          }
+          return client;
+        }));
+        return fallbackClient;
+      }
+
+      let fallbackClient: Client | undefined;
+      setClients(prev => {
+        const highestNumericId = prev.reduce((max, client) => {
+          const match = /^C(\d+)$/.exec(client.id);
+          if (!match) {
+            return max;
+          }
+          return Math.max(max, Number(match[1]));
+        }, 0);
+        const nextIdNumber = highestNumericId + 1;
+        const generatedId = `C${String(nextIdNumber).padStart(3, '0')}`;
+        const avatarSeed = clientToSave.avatarUrl && clientToSave.avatarUrl.trim() !== ''
+          ? clientToSave.avatarUrl
+          : `https://picsum.photos/seed/new-client-${nextIdNumber}/100/100`;
+
+        fallbackClient = {
+          ...clientToSave,
+          id: generatedId,
+          joinDate: new Date(),
+          totalBookings: 0,
+          totalSpent: 0,
+          avatarUrl: avatarSeed,
+        } as Client;
+
+        return [fallbackClient, ...prev];
+      });
+      return fallbackClient;
     }
   };
   
-  const handleSaveClientNotes = (clientId: string, notes: string) => {
-    setClients(clients.map(c => c.id === clientId ? { ...c, notes } : c));
-  };
+  const handleSaveClientNotes = useCallback((clientId: string, notes: string) => {
+    setClients(prev => prev.map(client => (client.id === clientId ? { ...client, notes } : client)));
 
-  const handleDeleteClient = (clientId: string) => {
-    const updatedBookings = bookings.filter(b => b.clientId !== clientId);
-    const updatedInvoices = invoices.filter(i => i.clientId !== clientId);
-    const updatedEditingJobs = editingJobs.filter(job => !bookings.some(b => b.clientId === clientId && b.id === job.bookingId));
-    
-    setBookings(updatedBookings);
-    setInvoices(updatedInvoices);
-    setEditingJobs(updatedEditingJobs);
-    setClients(clients.filter(c => c.id !== clientId));
+    const existing = clients.find(client => client.id === clientId);
+    if (existing) {
+      void handleSaveClient({
+        id: clientId,
+        name: existing.name,
+        email: existing.email,
+        phone: existing.phone,
+        avatarUrl: existing.avatarUrl,
+        notes,
+        financialStatus: existing.financialStatus,
+      });
+    }
+  }, [clients, handleSaveClient]);
 
-    setSelectedClientId(null); // Go back to the list view after deleting
-  };
+  const handleDeleteClient = useCallback((clientId: string) => {
+    const bookingsToRemove = bookings.filter(booking => booking.clientId === clientId).map(booking => booking.id);
+    const bookingIdSet = new Set(bookingsToRemove);
+
+    setBookings(bookings.filter(booking => booking.clientId !== clientId));
+    setInvoices(invoices.filter(invoice => invoice.clientId !== clientId));
+    setEditingJobs(editingJobs.filter(job => job.clientId !== clientId && !bookingIdSet.has(job.bookingId)));
+    setClients(prev => prev.filter(client => client.id !== clientId));
+
+    setSelectedClientId(null);
+
+    void (async () => {
+      try {
+        const updatedState = await deleteClient(clientId);
+        setClients(updatedState.clients);
+        setBookings(updatedState.bookings);
+        setInvoices(updatedState.invoices);
+        setEditingJobs(updatedState.editingJobs);
+        setActivities(updatedState.activities);
+        setExpenses(updatedState.expenses);
+        setRevenueData(updatedState.revenueData);
+        setPandLData(updatedState.pandLData);
+        setSessionRevenue(updatedState.sessionRevenue);
+        setPaymentAccounts(updatedState.paymentAccounts);
+        setAppSettings(updatedState.appSettings);
+        setStaff(updatedState.staff);
+        setSessionTypes(updatedState.sessionTypes);
+        setEditingStatuses(updatedState.editingStatuses);
+      } catch (error) {
+        console.error('Failed to delete client via API:', error);
+        setIsOfflineMode(true);
+      }
+    })();
+  }, [bookings, deleteClient, editingJobs, invoices]);
 
   const handleSaveBooking = (bookingToSave: Omit<Booking, 'id' | 'clientName' | 'clientAvatarUrl' | 'photographer' | 'invoiceId' | 'sessionType' | 'photoSelections'> & { id?: string }): Booking | void => {
     const getSessionTypeName = () => {
