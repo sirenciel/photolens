@@ -1,22 +1,32 @@
 # Backend–Frontend Integration Review
 
 ## Summary
-- The React shell loads and saves the consolidated application state through the Node server's `/api/state` endpoint, so high-level persistence is wired up.
-- Client onboarding and edits now flow through `/api/clients`, letting the backend mint IDs, persist notes, and cascade deletions while other domains still mutate local arrays first.
-- When the HTTP bridge is unavailable the UI immediately toggles into an offline mode and re-hydrates from the mock fixtures, so the product can run without the server but doesn't stay in sync.
+- The React shell bootstraps its data stores through the Node server's `/api/state` endpoint and persists the full snapshot back through the same route, so global state saving/loading is wired up.
+- Client onboarding, edits, and deletions call `/api/clients`, allowing the backend to mint IDs, recompute totals, and cascade removals when the integration path is online.
+- When any call fails the UI flips into an offline mode and rehydrates from the mock fixtures, preserving usability at the cost of drifting away from the server snapshot until a resync succeeds.
 
 ## Evidence
-### What already works
-- `App.tsx` bootstraps its stores by calling `fetchAppState()` and replaces all local slices with the payload returned by the server, clearing the offline flag on success.【F:App.tsx†L40-L83】
-- Whenever the in-memory snapshot changes and the UI is online, `persistAppState()` posts the serialised snapshot back to the backend, allowing the Node process to save it to disk.【F:App.tsx†L119-L164】【F:services/api.ts†L178-L214】
-- `handleSaveClient` now calls `createClient`/`updateClient` helpers that in turn hit `/api/clients`, and client deletions invoke `DELETE /api/clients/:id` so the server recomputes derived totals and prunes related bookings/invoices.【F:App.tsx†L215-L307】【F:services/api.ts†L200-L266】【F:server/index.js†L18-L214】
-- The backend exposes matching `GET`/`PUT /api/state` handlers that read and write the JSON file used to keep the app stateful between sessions.【F:server/index.js†L1-L214】
+### Working pieces
+- `App.tsx` hydrates the app by calling `fetchAppState()` and replaces all local slices with the payload returned by the server, clearing the offline flag on success.【F:App.tsx†L50-L117】
+- Whenever the in-memory snapshot changes and the UI is online, `persistAppState()` posts the serialised snapshot back to the backend so it can be saved to disk.【F:App.tsx†L119-L145】【F:services/api.ts†L202-L230】
+- `handleSaveClient` now routes through `createClient`/`updateClient`, while deletions invoke `DELETE /api/clients/:id`, ensuring the server recomputes derived totals and prunes related bookings and invoices.【F:App.tsx†L235-L367】【F:services/api.ts†L232-L281】【F:server/index.js†L1-L214】
 
-### What is still missing
-- Bookings, invoices, expenses, and editing jobs still update purely in-memory; only the client domain talks to dedicated endpoints, so validation and ID generation for the other entities remain client-side.【F:App.tsx†L309-L672】【F:services/api.ts†L18-L266】
-- Because the client falls back to mocks when the server is unreachable, users can diverge their local state from whatever is stored on disk until the next successful sync.【F:App.tsx†L83-L108】
+## Detailed gaps to fix
+### Booking, invoice, and expense CRUD stay in the browser
+- Booking and invoice handlers still mutate React state directly (`setBookings`, `setInvoices`) and fabricate IDs/timestamps locally instead of delegating to backend endpoints.【F:App.tsx†L369-L682】
+- Expense creation and editing mirror that pattern, which means validation, deduping, and financial rollups never leave the browser runtime.【F:App.tsx†L684-L720】
+- `services/api.ts` exposes only state snapshot and client helpers; there are no REST helpers for bookings, invoices, payments, or expenses yet.【F:services/api.ts†L18-L281】
 
-## Recommendations
-- Extend the new pattern to bookings, invoices, and editing jobs so the backend owns their IDs, validation, and cascading effects.
-- Add authentication and permission checks server-side to mirror the role logic applied in the UI.
-- Replace the mock fallback with lightweight optimistic queuing or at least a merge strategy so offline edits do not silently overwrite the persisted JSON snapshot.
+### Automations and history are front-end only
+- Automated invoice reminders run inside a `useEffect` and append activity feed entries on the client, so reminders are not scheduled or persisted server-side.【F:App.tsx†L147-L206】
+- Activity history, editing workflow transitions, and dashboard metrics are derived in-memory; the backend merely stores whatever snapshot the UI last uploaded.【F:App.tsx†L50-L720】【F:server/index.js†L1-L214】
+
+### Offline fallback can overwrite server truth
+- When any API call throws, the app flags itself as offline, restores the mock fixtures, and keeps letting users mutate the in-memory arrays, but there is no merge strategy when connectivity returns.【F:App.tsx†L83-L117】【F:App.tsx†L235-L367】
+- Because the next successful `persistAppState` pushes the full snapshot, any offline edits overwrite the server JSON with whatever the browser currently holds, even if another operator changed the file in the meantime.【F:App.tsx†L119-L145】【F:server/index.js†L1-L214】
+
+## Recommended fixes
+1. **Introduce real endpoints** for bookings, invoices, expenses, and editing jobs so the server, not the browser, owns ID generation, validation, and cascading effects.
+2. **Move business automations** (invoice reminders, activity logging, editing job transitions) to the backend or at least to a shared job runner that the server controls.
+3. **Design an offline sync strategy** such as queued mutations or diff-based merges to prevent the all-or-nothing snapshot upload from trampling concurrent edits.
+4. **Harden the server** with authentication/authorization and input validation before exposing it beyond development environments.
