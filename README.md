@@ -24,6 +24,10 @@ View your app in AI Studio: https://ai.studio/apps/drive/1NksvyaEmdqRcALjlGF4Kjm
 
 When the backend is unavailable the UI will automatically fall back to the bundled mock data and run in offline mode. Any changes you make while offline remain in memory only; refresh the app after the API becomes reachable again to resync with the backend.
 
+### Integration status
+
+Refer to [`docs/integration-status.md`](docs/integration-status.md) for a snapshot of how the frontend currently talks to the lightweight backend and which workflows still run purely in the browser.
+
 ## Share a temporary online preview
 
 If you want to open the running dev server from another device or share a one-off link, you can expose the local Vite port through a tunnelling tool such as [localtunnel](https://github.com/localtunnel/localtunnel) (you can swap it for ngrok, Cloudflare Tunnel, etc.).
