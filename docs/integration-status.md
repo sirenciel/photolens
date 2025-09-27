@@ -10,15 +10,15 @@ This document tracks how the frontend currently interacts with the lightweight b
 
 ## Still Missing
 
-Even with the new HTTP bridge in place, several parts of the application remain frontend-only and have not been integrated with purpose-built backend logic:
+The bridge only shuttles a JSON snapshot between the browser and the Node process. All domain logic, validation, and relationships continue to live exclusively in the frontend:
 
-1. **Entity-level APIs** – there are no REST endpoints for granular CRUD actions (e.g., `/clients`, `/bookings`). The frontend writes the whole state file for every change, so there is no server-side validation, deduplication, or conflict detection.
-2. **Authentication & authorisation** – staff permissions are still derived from local enums; there is no login flow, no token exchange, and the backend serves the same state to any caller.
-3. **Business workflows** – automated reminders, editing job transitions, financial calculations, and activity feeds execute entirely in the browser. The backend neither schedules tasks nor emits domain events.
-4. **File and asset handling** – uploads such as photo galleries, receipts, or contracts are not supported. Paths like `driveFolderUrl` continue to be mock placeholders.
-5. **Reporting & analytics** – charts and KPI widgets pull from mock aggregates that are persisted as-is. The backend does not recalculate revenue or profit/loss figures.
-6. **Multi-user concurrency** – because updates overwrite the JSON snapshot, simultaneous editors would clobber each other’s changes. There is no locking, versioning, or real-time sync.
+- **Entity CRUD endpoints** – the server exposes only `/api/state`. React components still call helpers such as `handleSaveClient`, `handleSaveBooking`, and `handleSaveInvoice` (all in `App.tsx`), mutate local arrays, and then overwrite the entire state file. There are no RESTful resources like `/clients` or `/bookings`, so the backend cannot enforce constraints or generate IDs.
+- **Authentication & authorisation** – `currentUser` is selected from the loaded staff list, permissions come from `services/permissions.ts`, and there is no login, token exchange, or server-side role enforcement. Anyone with the URL can read or replace the JSON payload.
+- **Business workflows** – automated invoice reminders, editing job chaining, financial updates, and activity feed entries are executed within React effects and handlers. The backend neither schedules background jobs nor emits domain events.
+- **Files & external services** – properties such as `driveFolderUrl`, proofing galleries, receipt uploads, or WhatsApp notifications are mocked. The server does not manage storage, webhooks, or third-party integrations.
+- **Reporting & analytics** – charts on the dashboard and reports pages reuse the persisted aggregates (`revenueData`, `pandLData`, etc.). The backend never recomputes metrics from transactional records.
+- **Concurrency & conflict handling** – because the client writes the whole snapshot, simultaneous editors would race and overwrite each other. There is no optimistic locking, change history, or diff-based merging.
 
 ## Next Steps
 
-To complete the integration, prioritise designing a real API surface (with routing, persistence, and validation), add authentication, and move critical workflows (reminder scheduling, invoice generation, expense tracking) server-side. Only then should the frontend stop importing the mock data entirely and rely solely on network responses.
+To move beyond the prototype, introduce real domain endpoints with validation, persist entities in a database, add authentication, and migrate critical workflows (reminder scheduling, invoice generation, expense tracking) to the server. Once those pieces exist, the frontend can drop the mock-data imports and rely solely on backend responses.
