@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { BookingFormProps, UserRole, Client, Invoice, Booking } from '../../types';
 import Modal from '../shared/Modal';
 import ClientForm from '../clients/ClientForm';
+import { useWorkflow } from '../../hooks/useWorkflow';
+import { WorkflowStates } from '../../services/workflowEngine';
+import WorkflowStatusBadge from '../shared/WorkflowStatusBadge';
 
 const BookingForm: React.FC<BookingFormProps> = ({ booking, clients, staff, sessionTypes, invoices, bookings, onSave, onCancel, onSaveClient }) => {
     const [clientId, setClientId] = useState('');
@@ -13,6 +16,17 @@ const BookingForm: React.FC<BookingFormProps> = ({ booking, clients, staff, sess
     const [notes, setNotes] = useState('');
     const [location, setLocation] = useState('');
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+    const [conflicts, setConflicts] = useState<Booking[]>([]);
+
+    // Workflow integration
+    const { executeTransition, getValidTransitions, isTransitioning } = useWorkflow({
+        onSuccess: (message) => {
+            console.log('Workflow success:', message);
+        },
+        onError: (error) => {
+            console.error('Workflow error:', error);
+        }
+    });
 
     // Contextual Client Info State
     const [clientContext, setClientContext] = useState<{outstanding: number, pastBookings: number} | null>(null);
@@ -46,6 +60,33 @@ const BookingForm: React.FC<BookingFormProps> = ({ booking, clients, staff, sess
         }
     }, [booking]);
 
+    useEffect(() => {
+        if (!photographerId || !date) {
+            setConflicts([]);
+            return;
+        }
+
+        const selectedDate = new Date(date);
+
+        const conflicting = bookings.filter(existing => {
+            if (existing.id === booking?.id) return false;
+            if (existing.photographerId !== photographerId) return false;
+
+            // Consider bookings conflicting if they fall on the same day
+            const sameDay = existing.date.toDateString() === selectedDate.toDateString();
+            if (!sameDay) {
+                return false;
+            }
+
+            // Treat events starting within a 2 hour window as conflicts
+            const diffInMs = Math.abs(existing.date.getTime() - selectedDate.getTime());
+            const diffInHours = diffInMs / (1000 * 60 * 60);
+            return diffInHours < 2;
+        });
+
+        setConflicts(conflicting);
+    }, [photographerId, date, bookings, booking?.id]);
+
     // INTEGRATION: Contextual client info
     useEffect(() => {
         if (clientId) {
@@ -58,13 +99,20 @@ const BookingForm: React.FC<BookingFormProps> = ({ booking, clients, staff, sess
         }
     }, [clientId, invoices, bookings]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!clientId || !photographerId || !sessionCategoryId || !sessionPackageId) {
             alert('Please fill out all session and assignment details.');
             return;
         }
-        onSave({ 
+        
+        // Workflow validation - check for conflicts if confirming
+        if (status === 'Confirmed' && conflicts.length > 0) {
+            alert('Cannot confirm booking: Photographer has conflicts on this date');
+            return;
+        }
+
+        const bookingData = {
             id: booking?.id, 
             clientId,
             sessionCategoryId,
@@ -74,7 +122,15 @@ const BookingForm: React.FC<BookingFormProps> = ({ booking, clients, staff, sess
             status,
             notes,
             location,
-        });
+        };
+
+        const savedBooking = await onSave(bookingData);
+        
+        // Execute workflow transition if status changed and booking was saved
+        if (savedBooking && booking?.status !== status) {
+            await executeTransition('booking', savedBooking, status as WorkflowStates, 
+                `Booking ${status.toLowerCase()} successfully`);
+        }
     };
     
     const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -82,8 +138,8 @@ const BookingForm: React.FC<BookingFormProps> = ({ booking, clients, staff, sess
         setSessionPackageId(''); // Reset package selection when category changes
     }
 
-    const handleSaveNewClient = (clientData: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => {
-        const newClient = onSaveClient(clientData);
+    const handleSaveNewClient = async (clientData: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => {
+        const newClient = await onSaveClient(clientData);
         if (newClient) {
             setClientId(newClient.id); // Auto-select the new client
         }
@@ -190,7 +246,13 @@ const BookingForm: React.FC<BookingFormProps> = ({ booking, clients, staff, sess
                         />
                     </div>
                 </div>
-                 <div>
+                {conflicts.length > 0 && (
+                    <div className="bg-red-500/10 border border-red-500/40 text-red-200 text-sm rounded-lg p-3">
+                        This photographer already has {conflicts.length} booking{conflicts.length > 1 ? 's' : ''} around this time. Consider selecting another slot or reassigning the job.
+                    </div>
+                )}
+
+                <div>
                     <label htmlFor="booking-notes" className="block text-sm font-medium text-slate-300">Booking Notes (for Photographer)</label>
                      <textarea
                         id="booking-notes"

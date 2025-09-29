@@ -14,7 +14,7 @@ const RecordPaymentForm: React.FC<RecordPaymentFormProps> = ({ invoice, paymentA
     const [accountId, setAccountId] = useState(paymentAccounts[0]?.id || '');
     const [methodNotes, setMethodNotes] = useState('');
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (typeof amount !== 'number' || amount <= 0) {
             alert("Please enter a valid payment amount.");
@@ -24,7 +24,7 @@ const RecordPaymentForm: React.FC<RecordPaymentFormProps> = ({ invoice, paymentA
             alert("Please select a payment account.");
             return;
         }
-        onSave({
+        await onSave({
             date: new Date(paymentDate),
             amount: Number(amount),
             accountId,

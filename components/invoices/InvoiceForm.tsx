@@ -7,7 +7,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, bookings, clients, s
     const [clientId, setClientId] = useState('');
     const [items, setItems] = useState<InvoiceItem[]>([]);
     const [dueDate, setDueDate] = useState('');
-    const [status, setStatus] = useState<'Paid' | 'Overdue' | 'Sent'>('Sent');
+    const [status, setStatus] = useState<'Draft' | 'Paid' | 'Overdue' | 'Sent'>('Sent');
+    const [notes, setNotes] = useState('');
     
     useEffect(() => {
         if (invoice) {
@@ -16,6 +17,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, bookings, clients, s
             setItems(invoice.items.map(item => ({...item}))); // Create a copy
             setDueDate(new Date(invoice.dueDate).toISOString().split('T')[0]);
             setStatus(invoice.status);
+            setNotes(invoice.notes || '');
         } else {
             resetForm();
         }
@@ -27,6 +29,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, bookings, clients, s
         setItems([{ id: `item-${Date.now()}`, description: '', quantity: 1, price: 0 }]);
         setDueDate('');
         setStatus('Sent');
+        setNotes('');
     };
 
     const handleBookingChange = (selectedBookingId: string) => {
@@ -77,19 +80,20 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, bookings, clients, s
         }
     };
     
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!bookingId || !clientId) {
             alert('Please select a booking.');
             return;
         }
-        onSave({
+        await onSave({
             id: invoice?.id,
             bookingId,
             clientId,
             items,
             dueDate: new Date(dueDate),
             status,
+            notes,
         });
     };
 
@@ -216,11 +220,24 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoice, bookings, clients, s
                         required
                         className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                     >
+                        <option value="Draft">Draft</option>
                         <option value="Sent">Sent</option>
                         <option value="Paid">Paid</option>
                         <option value="Overdue">Overdue</option>
                     </select>
                 </div>
+            </div>
+
+            <div>
+                <label htmlFor="invoice-notes" className="block text-sm font-medium text-slate-300">Notes</label>
+                <textarea
+                    id="invoice-notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={3}
+                    placeholder="Optional footer or payment notes"
+                    className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
             </div>
 
             <div className="flex justify-end space-x-4 pt-4">

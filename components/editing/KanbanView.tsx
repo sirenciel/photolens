@@ -18,9 +18,9 @@ const KanbanCard: React.FC<{
         onViewClient(job.clientId);
     };
     
-    const handleNotifyClick = (e: React.MouseEvent) => {
+    const handleNotifyClick = async (e: React.MouseEvent) => {
         e.stopPropagation();
-        onNotifyClient(job.id);
+        await onNotifyClient(job.id);
     };
     
     const handleDriveClick = (e: React.MouseEvent) => {
@@ -68,7 +68,7 @@ const KanbanCard: React.FC<{
                         Notify (WA)
                     </button>
                     <button 
-                        onClick={(e) => { e.stopPropagation(); onRequestRevision(job); }}
+                        onClick={async (e) => { e.stopPropagation(); await onRequestRevision(job); }}
                         className="w-full text-left text-xs py-1 px-2 rounded-md bg-purple-500/20 text-purple-300 hover:bg-purple-500 hover:text-white transition-colors flex items-center"
                         title="Request a revision for this job"
                     >
@@ -133,12 +133,12 @@ const KanbanView: React.FC<KanbanViewProps> = ({ jobs, statuses, onUpdateStatus,
         e.dataTransfer.effectAllowed = 'move';
     };
 
-    const handleDrop = (e: React.DragEvent<HTMLDivElement>, statusId: string) => {
+    const handleDrop = async (e: React.DragEvent<HTMLDivElement>, statusId: string) => {
         e.preventDefault();
         if (draggedJobId) {
             const job = jobs.find(a => a.id === draggedJobId);
             if (job && job.statusId !== statusId) {
-                 onUpdateStatus(draggedJobId, statusId);
+                 await onUpdateStatus(draggedJobId, statusId);
             }
         }
         setDraggedJobId(null);

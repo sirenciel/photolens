@@ -77,11 +77,11 @@ const BookingsPage: React.FC<BookingsPageProps> = ({
         setIsModalOpen(true);
     };
 
-    const handleSave = (bookingData: Omit<Booking, 'id' | 'clientName' | 'clientAvatarUrl' | 'photographer' | 'invoiceId' | 'sessionType' | 'photoSelections'> & { id?: string }) => {
+    const handleSave = async (bookingData: Omit<Booking, 'id' | 'clientName' | 'clientAvatarUrl' | 'photographer' | 'invoiceId' | 'sessionType' | 'photoSelections'> & { id?: string }) => {
         const originalBooking = bookingData.id ? bookings.find(b => b.id === bookingData.id) : null;
         const wasCompleted = originalBooking?.status === 'Completed';
         
-        const savedBooking = onSaveBooking(bookingData);
+        const savedBooking = await onSaveBooking(bookingData);
         setIsModalOpen(false);
         
         if (savedBooking) {
@@ -107,9 +107,9 @@ const BookingsPage: React.FC<BookingsPageProps> = ({
         setBriefModalBooking(booking);
     };
 
-    const handleWizardCreateInvoice = () => {
+    const handleWizardCreateInvoice = async () => {
         if (wizardContext.booking) {
-            const newInvoice = onCreateInvoiceFromBooking(wizardContext.booking.id);
+            const newInvoice = await onCreateInvoiceFromBooking(wizardContext.booking.id);
             if (newInvoice) {
                 setWizardContext(prev => ({...prev, invoice: newInvoice}));
                 setWizardStep('recordPayment');
@@ -120,9 +120,9 @@ const BookingsPage: React.FC<BookingsPageProps> = ({
         }
     };
     
-    const handleWizardSavePayment = (paymentData: Omit<Payment, 'id' | 'recordedBy'>) => {
+    const handleWizardSavePayment = async (paymentData: Omit<Payment, 'id' | 'recordedBy'>) => {
         if (wizardContext.invoice) {
-            onRecordPayment(wizardContext.invoice.id, paymentData);
+            await onRecordPayment(wizardContext.invoice.id, paymentData);
         }
         handleCloseWizard();
     };
@@ -132,7 +132,7 @@ const BookingsPage: React.FC<BookingsPageProps> = ({
         setWizardContext({});
     };
 
-    const handleUpdateBookingDate = (bookingId: string, newDate: Date) => {
+    const handleUpdateBookingDate = async (bookingId: string, newDate: Date) => {
         const bookingToUpdate = bookings.find(b => b.id === bookingId);
         if (bookingToUpdate) {
             // Create a payload that onSaveBooking expects.
@@ -147,7 +147,7 @@ const BookingsPage: React.FC<BookingsPageProps> = ({
                 notes: bookingToUpdate.notes,
                 location: bookingToUpdate.location
             };
-            onSaveBooking(saveData);
+            await onSaveBooking(saveData);
         }
     };
 

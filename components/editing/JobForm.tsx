@@ -26,7 +26,7 @@ const JobForm: React.FC<JobFormProps> = ({ job, bookings, staff, clients, status
         }
     }, [job, statuses]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!bookingId) {
             alert('Please select a booking.');
@@ -37,7 +37,7 @@ const JobForm: React.FC<JobFormProps> = ({ job, bookings, staff, clients, status
             alert('Could not find the selected booking details.');
             return;
         }
-        onSave({ id: job?.id, bookingId, clientId: selectedBooking.clientId, editorId, statusId, driveFolderUrl, priority });
+        await onSave({ id: job?.id, bookingId, clientId: selectedBooking.clientId, editorId, statusId, driveFolderUrl, priority });
     };
 
     const selectedBooking = bookings.find(b => b.id === bookingId);

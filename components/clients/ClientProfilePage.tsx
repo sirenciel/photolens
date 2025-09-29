@@ -152,8 +152,8 @@ const ClientProfilePage: React.FC<ClientProfilePageProps> = ({
         alert('Notes saved!');
     };
     
-    const handleSaveClient = (clientData: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => {
-        onSaveClient(clientData);
+    const handleSaveClient = async (clientData: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => {
+        await onSaveClient(clientData);
         setIsEditModalOpen(false);
     };
 

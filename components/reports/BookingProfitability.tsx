@@ -29,7 +29,7 @@ const BookingProfitability: React.FC<BookingProfitabilityProps> = ({ bookings, i
 
 
     const profitabilityData: ProfitabilityData[] = bookings.map(booking => {
-        const invoice = invoices.find(inv => inv.id === booking.invoiceId);
+        const invoice = booking.invoiceId ? invoices.find(inv => inv.id === booking.invoiceId) : undefined;
         const revenue = invoice ? invoice.amount : 0;
         
         const linkedExpenses = expenses.filter(exp => exp.bookingId === booking.id);

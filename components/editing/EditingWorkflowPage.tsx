@@ -92,14 +92,14 @@ const EditingWorkflowPage: React.FC<EditingWorkflowPageProps> = ({
         setIsModalOpen(true);
     };
     
-    const handleSave = (jobData: Omit<EditingJob, 'id' | 'clientName' | 'editorName' | 'editorAvatarUrl' | 'uploadDate'> & { id?: string }) => {
-        onSaveJob(jobData);
+    const handleSave = async (jobData: Omit<EditingJob, 'id' | 'clientName' | 'editorName' | 'editorAvatarUrl' | 'uploadDate'> & { id?: string }) => {
+        await onSaveJob(jobData);
         setIsModalOpen(false);
     };
 
-    const handleDelete = (jobId: string) => {
+    const handleDelete = async (jobId: string) => {
         if (window.confirm('Are you sure you want to delete this editing job?')) {
-            onDeleteJob(jobId);
+            await onDeleteJob(jobId);
         }
     };
 
@@ -108,9 +108,9 @@ const EditingWorkflowPage: React.FC<EditingWorkflowPageProps> = ({
         setIsRevisionModalOpen(true);
     };
 
-    const handleSaveRevision = (notes: string) => {
+    const handleSaveRevision = async (notes: string) => {
         if (jobForRevision) {
-            onRequestRevision(jobForRevision.id, notes);
+            await onRequestRevision(jobForRevision.id, notes);
         }
         setIsRevisionModalOpen(false);
         setJobForRevision(null);

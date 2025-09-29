@@ -69,7 +69,7 @@ const InvoicesTable: React.FC<InvoicesTableProps> = ({ invoices, currentUser, pa
                                 </td>
                                 <td className="p-4 whitespace-nowrap">
                                     <div className="flex items-center">
-                                        <img className="h-10 w-10 rounded-full object-cover" src={invoice.clientAvatarUrl} alt={invoice.clientName} />
+                                        <img className="h-10 w-10 rounded-full object-cover" src={invoice.clientAvatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(invoice.clientName || 'Client')}`} alt={invoice.clientName} />
                                         <div className="ml-3">
                                             <p 
                                                 className="font-medium text-white hover:text-cyan-400 cursor-pointer"

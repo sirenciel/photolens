@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -12,9 +12,54 @@ import StaffPage from './components/staff/StaffPage';
 import SettingsPage from './components/settings/SettingsPage';
 import ClientProfilePage from './components/clients/ClientProfilePage';
 import InvoicePreviewModal from './components/invoices/InvoicePreviewModal';
-import { mockBookings, mockClients, mockInvoices, mockEditingJobs, mockStaff, mockActivities, mockRevenueData, mockPandLData, mockSessionRevenue, mockSessionTypes, mockEditingStatuses, mockExpenses, mockPaymentAccounts, mockSettings } from './services/mockData';
+import InitialSetupWizard from './components/setup/InitialSetupWizard';
+import { NotificationProvider } from './components/shared/NotificationProvider';
+import AuthPage from './components/auth/AuthPage';
+import { authService } from './services/authService';
+import { AuthSession } from '@supabase/supabase-js';
+// Mock visuals for charts/activities kept minimal locally; core entities pulled from Supabase.
+// Removed heavy mock data usage.
+import { dataManager, SaveInvoicePayload } from './services/dataManager';
+import { checkDatabaseConnection, seedDatabase } from './services/seedData';
+import { appSettingsService } from './services/dataService';
 import { Client, Booking, StaffMember, Invoice, SessionCategory, SessionPackage, EditingJob, Permission, UserRole, EditingStatus, PhotoSelection, Activity, Payment, Expense, InvoiceItem, PaymentAccount, ClientFinancialStatus, AppSettings } from './types';
 import { hasPermission, PAGE_PERMISSIONS } from './services/permissions';
+
+// Fallback user so the app can render even if the staff table is empty
+const DEFAULT_CURRENT_USER: StaffMember = {
+  id: '00000000-0000-0000-0000-000000000000',
+  name: 'Admin (local)',
+  email: '',
+  avatarUrl: '',
+  role: UserRole.Owner,
+  status: 'Active',
+  lastLogin: new Date()
+};
+
+const createDefaultAppSettings = (): AppSettings => ({
+    companyProfile: { name: '', address: '', email: '', logoUrl: '' },
+    invoiceSettings: { prefix: 'INV', defaultDueDays: 14, footerNotes: '' },
+    automatedReminders: { enabled: true, frequencyDays: 7 }
+});
+
+const deriveStaffFromSession = (session: AuthSession): StaffMember => {
+    const metadata = session.user.user_metadata ?? {};
+    const email = session.user.email ?? '';
+    const roleValue = metadata.role;
+    const resolvedRole = roleValue && Object.values(UserRole).includes(roleValue)
+        ? roleValue as UserRole
+        : UserRole.Owner;
+
+    return {
+        id: session.user.id,
+        name: metadata.full_name || metadata.name || email || 'Pengguna PhotoLens',
+        email,
+        avatarUrl: metadata.avatar_url ?? '',
+        role: resolvedRole,
+        status: 'Active',
+        lastLogin: new Date()
+    };
+};
 
 const App: React.FC = () => {
   const [activePage, setActivePage] = useState('Dashboard');
@@ -22,947 +67,870 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [pageFilters, setPageFilters] = useState<Record<string, any>>({});
   
-  // Simulate logged-in user state
-  const [currentUser, setCurrentUser] = useState<StaffMember>(mockStaff[0]); // Default to Owner
+  // Data states - now managed by Supabase
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [sessionTypes, setSessionTypes] = useState<SessionCategory[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([]);
+  
+  // Local-only UI datasets (charts/activity placeholders) until reports backend exists
+  const [editingJobs, setEditingJobs] = useState<EditingJob[]>([]);
+  const [editingStatuses, setEditingStatuses] = useState<EditingStatus[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [revenueData, setRevenueData] = useState<{ month: string; revenue: number; }[]>([]);
+  const [pandLData, setPandLData] = useState<{ month: string; revenue: number; expenses: number; }[]>([]);
+  const [sessionRevenue, setSessionRevenue] = useState<{ name: string; value: number; id: string; }[]>([]);
+  const [appSettings, setAppSettings] = useState<AppSettings>(() => createDefaultAppSettings());
+  
+  // Current user - will be the first staff member from database
+  const [currentUser, setCurrentUser] = useState<StaffMember | null>(null);
 
-  // Centralized state management
-  const [clients, setClients] = useState(mockClients);
-  const [bookings, setBookings] = useState(mockBookings);
-  const [invoices, setInvoices] = useState(mockInvoices);
-  const [editingJobs, setEditingJobs] = useState(mockEditingJobs);
-  const [staff, setStaff] = useState(mockStaff);
-  const [sessionTypes, setSessionTypes] = useState(mockSessionTypes);
-  const [editingStatuses, setEditingStatuses] = useState(mockEditingStatuses);
-  const [activities, setActivities] = useState(mockActivities);
-  const [expenses, setExpenses] = useState(mockExpenses);
-  const [revenueData, setRevenueData] = useState(mockRevenueData);
-  const [pandLData, setPandLData] = useState(mockPandLData);
-  const [sessionRevenue, setSessionRevenue] = useState(mockSessionRevenue);
-  const [paymentAccounts, setPaymentAccounts] = useState(mockPaymentAccounts);
-  const [appSettings, setAppSettings] = useState<AppSettings>(mockSettings);
+  
+  // Loading states
+  const [isLoading, setIsLoading] = useState(true);
+  const [dbConnected, setDbConnected] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [showSetupWizard, setShowSetupWizard] = useState(false);
 
   // Global Invoice Preview Modal State
   const [previewData, setPreviewData] = useState<{ invoice: Invoice | null; client: Client | null; type: 'invoice' | 'receipt' }>({ invoice: null, client: null, type: 'invoice' });
 
-    // Automated Invoice Reminder Logic
-    useEffect(() => {
-        if (!appSettings.automatedReminders.enabled) return;
+  const resetAppState = useCallback(() => {
+    setClients([]);
+    setBookings([]);
+    setInvoices([]);
+    setStaff([]);
+    setSessionTypes([]);
+    setExpenses([]);
+    setPaymentAccounts([]);
+    setEditingJobs([]);
+    setEditingStatuses([]);
+    setActivities([]);
+    setRevenueData([]);
+    setPandLData([]);
+    setSessionRevenue([]);
+    setAppSettings(createDefaultAppSettings());
+    setPreviewData({ invoice: null, client: null, type: 'invoice' });
+    setCurrentUser(null);
+    setNeedsSetup(false);
+    setShowSetupWizard(false);
+    setSelectedClientId(null);
+    setPageFilters({});
+    setActivePage('Dashboard');
+    setIsSidebarOpen(false);
+    setDbConnected(false);
+    setIsLoading(false);
+  }, []);
 
-        const checkAndSendReminders = () => {
-            const today = new Date();
-            const remindersToSend: { invoice: Invoice, client: Client }[] = [];
-            const updatedInvoices = [...invoices];
-            
-            invoices.forEach(inv => {
-                if (inv.status === 'Overdue') {
-                    const shouldSend = !inv.lastReminderSent || 
-                        (today.getTime() - new Date(inv.lastReminderSent).getTime()) / (1000 * 3600 * 24) >= appSettings.automatedReminders.frequencyDays;
-                    
-                    if (shouldSend) {
-                        const client = clients.find(c => c.id === inv.clientId);
-                        if (client) {
-                            remindersToSend.push({ invoice: inv, client });
-                            // Update the invoice in our temporary array
-                            const invIndex = updatedInvoices.findIndex(i => i.id === inv.id);
-                            if(invIndex !== -1) {
-                                updatedInvoices[invIndex] = { ...updatedInvoices[invIndex], lastReminderSent: today };
-                            }
-                        }
-                    }
-                }
-            });
+  const loadAppData = useCallback(async (forceReload = false, activeSession?: AuthSession | null) => {
+    const sessionToUse = activeSession ?? session;
 
-            if (remindersToSend.length > 0) {
-                const newActivities = remindersToSend.map(({ invoice, client }) => ({
-                    id: `A${Date.now()}-${invoice.id}`,
-                    user: 'System',
-                    userAvatarUrl: 'https://picsum.photos/seed/system/100/100',
-                    action: 'sent an automated invoice reminder for',
-                    target: `${invoice.id} to ${client.name}`,
-                    timestamp: today,
-                }));
-                
-                console.log(`Sending ${remindersToSend.length} automated reminders...`);
+    console.log('[App] loadAppData started', { forceReload, hasSession: !!sessionToUse });
 
-                setActivities(prev => [...newActivities, ...prev]);
-                setInvoices(updatedInvoices);
-            }
-        };
+    try {
+      setIsLoading(true);
 
-        // In a real app, this might be a background task or triggered by a server event.
-        // Here, we'll run it once on load and then every hour for simulation.
-        checkAndSendReminders();
-        const intervalId = setInterval(checkAndSendReminders, 3600 * 1000); // Check every hour
-        
-        return () => clearInterval(intervalId);
-    }, [appSettings, invoices, clients]);
+      const connected = await checkDatabaseConnection();
+      setDbConnected(connected);
 
-  const handlePreviewInvoice = (invoiceId: string, type: 'invoice' | 'receipt' = 'invoice') => {
-      const invoice = invoices.find(i => i.id === invoiceId);
-      if (invoice) {
-          const client = clients.find(c => c.id === invoice.clientId);
-          setPreviewData({ invoice, client: client || null, type });
+      if (!connected) {
+        console.error('[App] Database connection failed – falling back to default user.');
+        setCurrentUser(DEFAULT_CURRENT_USER);
+        return;
       }
+
+      console.log('[App] Seeding database if necessary');
+      await seedDatabase();
+
+      console.log('[App] Fetching core datasets from Supabase');
+      const [
+        staffData,
+        clientsData,
+        bookingsData,
+        sessionTypesData,
+        invoicesData,
+        expensesData,
+        paymentAccountsData
+      ] = await Promise.all([
+        dataManager.getStaff(forceReload),
+        dataManager.getClients(forceReload),
+        dataManager.getBookings(forceReload),
+        dataManager.getSessionTypes(forceReload),
+        dataManager.getInvoices(forceReload),
+        dataManager.getExpenses(forceReload),
+        dataManager.getPaymentAccounts(forceReload)
+      ]);
+
+      console.log('[App] Core datasets loaded', {
+        staff: staffData.length,
+        clients: clientsData.length,
+        bookings: bookingsData.length,
+        sessionTypes: sessionTypesData.length,
+        invoices: invoicesData.length,
+        expenses: expensesData.length,
+        accounts: paymentAccountsData.length
+      });
+
+      let nextStaff = staffData;
+      const sessionEmail = sessionToUse?.user?.email?.toLowerCase();
+      let resolvedCurrentUser: StaffMember | null = null;
+
+      if (sessionEmail) {
+        resolvedCurrentUser = nextStaff.find(member => member.email.toLowerCase() === sessionEmail) ?? null;
+      }
+
+      if (!resolvedCurrentUser && nextStaff.length > 0) {
+        resolvedCurrentUser = nextStaff[0];
+      }
+
+      if (!resolvedCurrentUser && sessionToUse) {
+        const fallbackUser = deriveStaffFromSession(sessionToUse);
+        const fallbackEmail = fallbackUser.email.toLowerCase();
+        const alreadyExists = fallbackEmail
+          ? nextStaff.some(member => member.email.toLowerCase() === fallbackEmail)
+          : false;
+
+        if (!alreadyExists) {
+          nextStaff = fallbackEmail ? [fallbackUser, ...nextStaff] : nextStaff;
+        }
+
+        resolvedCurrentUser = fallbackUser;
+      }
+
+      if (!resolvedCurrentUser) {
+        resolvedCurrentUser = DEFAULT_CURRENT_USER;
+      }
+
+      setStaff(nextStaff);
+      setClients(clientsData);
+      setBookings(bookingsData);
+      setSessionTypes(sessionTypesData);
+      setInvoices(invoicesData);
+      setExpenses(expensesData);
+      setPaymentAccounts(paymentAccountsData);
+
+      const isEmpty = nextStaff.length === 0 &&
+        clientsData.length === 0 &&
+        sessionTypesData.length === 0;
+
+      if (isEmpty) {
+        setNeedsSetup(true);
+        setShowSetupWizard(true);
+      } else {
+        setNeedsSetup(false);
+        setShowSetupWizard(false);
+      }
+
+      setCurrentUser(resolvedCurrentUser);
+
+      try {
+        console.log('[App] Fetching optional datasets');
+        const [settings, statuses, jobs] = await Promise.all([
+          appSettingsService.get(),
+          dataManager.getEditingStatuses(forceReload),
+          dataManager.getEditingJobs(forceReload)
+        ]);
+
+        if (settings) {
+          setAppSettings(settings);
+        }
+
+        setEditingStatuses(statuses);
+        setEditingJobs(jobs);
+        console.log('[App] Optional datasets fetched', { statuses: statuses.length, jobs: jobs.length, hasSettings: !!settings });
+      } catch (optionalError) {
+        console.warn('[App] Optional settings/statuses load failed:', optionalError);
+      }
+    } catch (error) {
+      console.error('[App] Error initializing data:', error);
+      setDbConnected(false);
+    } finally {
+      setIsLoading(false);
+      console.log('[App] loadAppData finished');
+    }
+  }, [session]);
+
+  const handleAuthSuccess = useCallback((authSession?: AuthSession | null) => {
+    const resolvedSession = authSession ?? null;
+    setSession(resolvedSession);
+
+    if (!resolvedSession) {
+      resetAppState();
+      setIsCheckingAuth(false);
+      return;
+    }
+
+    setIsCheckingAuth(false);
+    void loadAppData(true, resolvedSession);
+  }, [loadAppData, resetAppState]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const bootstrapAuth = async () => {
+      try {
+        const currentSession = await authService.getSession();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setSession(currentSession);
+
+        if (!currentSession) {
+          resetAppState();
+          setIsCheckingAuth(false);
+          return;
+        }
+
+        setIsCheckingAuth(false);
+        await loadAppData(true, currentSession);
+      } catch (error) {
+        console.error('Error checking authentication state:', error);
+        resetAppState();
+        if (isMounted) {
+          setIsCheckingAuth(false);
+        }
+      } finally {
+        if (isMounted) {
+          setIsCheckingAuth(false);
+        }
+      }
+    };
+
+    bootstrapAuth();
+
+    const subscription = authService.onAuthStateChange(async (event, authSession) => {
+      if (!isMounted) {
+        return;
+      }
+
+      if (event === 'SIGNED_OUT') {
+        resetAppState();
+        setSession(null);
+        setIsCheckingAuth(false);
+        return;
+      }
+
+      setSession(authSession);
+      setIsCheckingAuth(false);
+
+      if (authSession && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+        await loadAppData(true, authSession);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.data.subscription.unsubscribe();
+    };
+  }, [loadAppData, resetAppState]);
+
+  // Handler for completing setup wizard
+  const handleSetupComplete = async () => {
+    setShowSetupWizard(false);
+    await loadAppData(true);
   };
-  
+
+  const handleSignOut = async () => {
+    try {
+      await authService.signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  // Event handlers with Supabase integration
+  const handleSaveClient = async (clientToSave: any) => {
+    try {
+      const savedClient = await dataManager.saveClient(clientToSave);
+      // Get fresh client list from dataManager instead of manually updating state
+      // This prevents double-adding since dataManager already handles the update
+      const updatedClients = await dataManager.getClients(true);
+      setClients(updatedClients);
+      return savedClient;
+    } catch (error) {
+      console.error('Error saving client:', error);
+    }
+  };
+
+  const handleDeleteClient = async (clientId: string) => {
+    try {
+      await dataManager.deleteClient(clientId);
+      setClients(prev => prev.filter(c => c.id !== clientId));
+      const updatedBookings = await dataManager.getBookings(true);
+      const updatedInvoices = await dataManager.getInvoices(true);
+      setBookings(updatedBookings);
+      setInvoices(updatedInvoices);
+      setSelectedClientId(null);
+    } catch (error) {
+      console.error('Error deleting client:', error);
+    }
+  };
+
+  const handleSaveBooking = async (bookingToSave: any) => {
+    try {
+      const savedBooking = await dataManager.saveBooking(bookingToSave);
+      // Use consistent pattern: refresh from dataManager instead of manual state update
+      const updatedBookings = await dataManager.getBookings(true);
+      const updatedClients = await dataManager.getClients(true);
+      setBookings(updatedBookings);
+      setClients(updatedClients);
+      return savedBooking;
+    } catch (error) {
+      console.error('Error saving booking:', error);
+    }
+  };
+
+  const handleDeleteBooking = async (bookingId: string) => {
+    try {
+      await dataManager.deleteBooking(bookingId);
+      setBookings(prev => prev.filter(b => b.id !== bookingId));
+      const updatedClients = await dataManager.getClients(true);
+      setClients(updatedClients);
+    } catch (error) {
+      console.error('Error deleting booking:', error);
+    }
+  };
+
+  const handleSaveStaff = async (staffToSave: any) => {
+    try {
+      const savedStaff = await dataManager.saveStaff(staffToSave);
+      // Use consistent pattern: refresh from dataManager instead of manual state update
+      const updatedStaff = await dataManager.getStaff(true);
+      setStaff(updatedStaff);
+      return savedStaff;
+    } catch (error) {
+      console.error('Error saving staff:', error);
+    }
+  };
+
+  const handleDeleteStaff = async (staffId: string) => {
+    try {
+      await dataManager.deleteStaff(staffId);
+      setStaff(prev => prev.filter(s => s.id !== staffId));
+    } catch (error) {
+      console.error('Error deleting staff:', error);
+    }
+  };
+
+  const handleSaveExpense = async (expenseToSave: any) => {
+    try {
+      const savedExpense = await dataManager.saveExpense(expenseToSave);
+      if (expenseToSave.id) {
+        setExpenses(prev => prev.map(e => e.id === expenseToSave.id ? savedExpense : e));
+      } else {
+        setExpenses(prev => [savedExpense, ...prev]);
+      }
+      return savedExpense;
+    } catch (error) {
+      console.error('Error saving expense:', error);
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    try {
+      await dataManager.deleteExpense(expenseId);
+      setExpenses(prev => prev.filter(e => e.id !== expenseId));
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+    }
+  };
+
+  const handleSaveSessionCategory = async (categoryToSave: any) => {
+    try {
+      const savedCategory = await dataManager.saveSessionCategory(categoryToSave);
+      if (categoryToSave.id) {
+        setSessionTypes(prev => prev.map(st => st.id === categoryToSave.id ? savedCategory : st));
+      } else {
+        setSessionTypes(prev => [...prev, savedCategory]);
+      }
+      return savedCategory;
+    } catch (error) {
+      console.error('Error saving session category:', error);
+    }
+  };
+
+  const handleDeleteSessionCategory = async (categoryId: string) => {
+    if (bookings.some(b => b.sessionCategoryId === categoryId)) {
+      alert("Cannot delete category. It is currently used in one or more bookings.");
+      return;
+    }
+    try {
+      await dataManager.deleteSessionCategory(categoryId);
+      setSessionTypes(prev => prev.filter(st => st.id !== categoryId));
+    } catch (error) {
+      console.error('Error deleting session category:', error);
+    }
+  };
+
+  const handleSavePaymentAccount = async (accountToSave: any) => {
+    try {
+      const savedAccount = await dataManager.savePaymentAccount(accountToSave);
+      if (accountToSave.id) {
+        setPaymentAccounts(prev => prev.map(acc => acc.id === accountToSave.id ? savedAccount : acc));
+      } else {
+        setPaymentAccounts(prev => [...prev, savedAccount]);
+      }
+      return savedAccount;
+    } catch (error) {
+      console.error('Error saving payment account:', error);
+    }
+  };
+
+  const handleDeletePaymentAccount = async (accountId: string) => {
+    if (expenses.some(exp => exp.accountId === accountId)) {
+      alert("Cannot delete an account that has expenses recorded from it.");
+      return;
+    }
+    try {
+      await dataManager.deletePaymentAccount(accountId);
+      setPaymentAccounts(prev => prev.filter(acc => acc.id !== accountId));
+    } catch (error) {
+      console.error('Error deleting payment account:', error);
+    }
+  };
+
+  const generateInvoiceNumber = () => {
+    const prefix = appSettings.invoiceSettings?.prefix || 'INV';
+    const uniqueSegment = Date.now().toString(36).toUpperCase();
+    return `${prefix}-${uniqueSegment}`;
+  };
+
+  const handleSaveClientNotes = async (clientId: string, notes: string) => {
+    try {
+      const existingClient = clients.find(c => c.id === clientId);
+      if (!existingClient) return;
+
+      const savedClient = await dataManager.saveClient({
+        id: clientId,
+        name: existingClient.name,
+        email: existingClient.email,
+        phone: existingClient.phone,
+        avatarUrl: existingClient.avatarUrl,
+        notes,
+        financialStatus: existingClient.financialStatus
+      });
+
+      setClients(prev => prev.map(client => client.id === clientId ? savedClient : client));
+    } catch (error) {
+      console.error('Error saving client notes:', error);
+    }
+  };
+
+  const handleSaveInvoice = async (invoiceData: Omit<Invoice, 'id' | 'clientName' | 'clientAvatarUrl' | 'amount' | 'amountPaid' | 'payments' | 'lastReminderSent'> & { id?: string }) => {
+    try {
+      const existingInvoice = invoiceData.id ? invoices.find(inv => inv.id === invoiceData.id) : null;
+      const invoiceNumber = existingInvoice?.invoiceNumber || generateInvoiceNumber();
+      const issueDate = existingInvoice?.date || new Date();
+
+      const subtotal = invoiceData.items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+      const tax = 0; // Extend with tax rules when available
+      const total = subtotal + tax;
+
+      const payload: SaveInvoicePayload = {
+        id: invoiceData.id,
+        clientId: invoiceData.clientId,
+        bookingId: invoiceData.bookingId ?? null,
+        invoiceNumber,
+        date: issueDate,
+        dueDate: invoiceData.dueDate,
+        status: invoiceData.status,
+        subtotal,
+        tax,
+        total,
+        notes: invoiceData.notes,
+        items: invoiceData.items
+      };
+
+      const savedInvoice = await dataManager.saveInvoice(payload);
+
+      setInvoices(prev => {
+        const exists = prev.some(inv => inv.id === savedInvoice.id);
+        return exists
+          ? prev.map(inv => inv.id === savedInvoice.id ? savedInvoice : inv)
+          : [savedInvoice, ...prev];
+      });
+
+      if (existingInvoice?.bookingId && existingInvoice.bookingId !== payload.bookingId) {
+        setBookings(prev => prev.map(booking => booking.id === existingInvoice.bookingId ? { ...booking, invoiceId: null } : booking));
+      }
+
+      if (payload.bookingId) {
+        setBookings(prev => prev.map(booking => booking.id === payload.bookingId ? { ...booking, invoiceId: savedInvoice.id } : booking));
+      }
+
+      return savedInvoice;
+    } catch (error) {
+      console.error('Error saving invoice:', error);
+      throw error;
+    }
+  };
+
+  const handleDeleteInvoice = async (invoiceId: string) => {
+    try {
+      const existingInvoice = invoices.find(inv => inv.id === invoiceId);
+      await dataManager.deleteInvoice(invoiceId);
+      setInvoices(prev => prev.filter(inv => inv.id !== invoiceId));
+
+      if (existingInvoice?.bookingId) {
+        setBookings(prev => prev.map(booking => booking.id === existingInvoice.bookingId ? { ...booking, invoiceId: null } : booking));
+      }
+    } catch (error) {
+      console.error('Error deleting invoice:', error);
+    }
+  };
+
+  const handleCreateInvoiceFromBooking = async (bookingId: string) => {
+    try {
+      const booking = bookings.find(b => b.id === bookingId);
+      if (!booking) {
+        throw new Error('Booking not found');
+      }
+
+      const category = sessionTypes.find(cat => cat.id === booking.sessionCategoryId);
+      const pkg = category?.packages.find(p => p.id === booking.sessionPackageId);
+
+      const items = [{
+        id: undefined,
+        description: booking.sessionType,
+        quantity: 1,
+        price: pkg?.price || 0
+      }];
+
+      const issueDate = new Date();
+      const dueDate = new Date(issueDate);
+      dueDate.setDate(issueDate.getDate() + (appSettings.invoiceSettings.defaultDueDays || 14));
+
+      const subtotal = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+      const tax = 0;
+      const total = subtotal + tax;
+
+      const payload: SaveInvoicePayload = {
+        clientId: booking.clientId,
+        bookingId: booking.id,
+        invoiceNumber: generateInvoiceNumber(),
+        date: issueDate,
+        dueDate,
+        status: 'Sent',
+        subtotal,
+        tax,
+        total,
+        items
+      };
+
+      const savedInvoice = await dataManager.saveInvoice(payload);
+
+      setInvoices(prev => [savedInvoice, ...prev.filter(inv => inv.id !== savedInvoice.id)]);
+      setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, invoiceId: savedInvoice.id } : b));
+
+      return savedInvoice;
+    } catch (error) {
+      console.error('Error creating invoice from booking:', error);
+      throw error;
+    }
+  };
+
+  const handleRecordPayment = async (invoiceId: string, paymentData: Omit<Payment, 'id' | 'recordedBy'>) => {
+    try {
+      const updatedInvoice = await dataManager.recordPayment(invoiceId, {
+        amount: paymentData.amount,
+        date: paymentData.date,
+        accountId: paymentData.accountId,
+        methodNotes: paymentData.methodNotes
+      });
+
+      setInvoices(prev => prev.map(inv => inv.id === invoiceId ? updatedInvoice : inv));
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      throw error;
+    }
+  };
+
+  const handleSavePhotographerNotes = async (bookingId: string, notes: string) => {
+    try {
+      const booking = bookings.find(b => b.id === bookingId);
+      if (!booking) return;
+
+      const savedBooking = await dataManager.saveBooking({
+        id: booking.id,
+        clientId: booking.clientId,
+        sessionCategoryId: booking.sessionCategoryId,
+        sessionPackageId: booking.sessionPackageId,
+        photographerId: booking.photographerId,
+        date: booking.date,
+        status: booking.status,
+        notes,
+        location: booking.location
+      });
+
+      setBookings(prev => prev.map(b => b.id === bookingId ? savedBooking : b));
+    } catch (error) {
+      console.error('Error saving photographer notes:', error);
+    }
+  };
+
+  const handleSaveEditingJob = async (jobData: Omit<EditingJob, 'id' | 'clientName' | 'editorName' | 'editorAvatarUrl' | 'uploadDate' | 'revisionCount' | 'revisionNotes'> & { id?: string }) => {
+    try {
+      const savedJob = await dataManager.saveEditingJob(jobData);
+      setEditingJobs(prev => {
+        const exists = prev.some(job => job.id === savedJob.id);
+        return exists ? prev.map(job => job.id === savedJob.id ? savedJob : job) : [savedJob, ...prev];
+      });
+    } catch (error) {
+      console.error('Error saving editing job:', error);
+    }
+  };
+
+  const handleDeleteEditingJob = async (jobId: string) => {
+    try {
+      await dataManager.deleteEditingJob(jobId);
+      setEditingJobs(prev => prev.filter(job => job.id !== jobId));
+    } catch (error) {
+      console.error('Error deleting editing job:', error);
+    }
+  };
+
+  const handleUpdateEditingJobStatus = async (jobId: string, newStatusId: string) => {
+    try {
+      const updatedJob = await dataManager.updateEditingJobStatus(jobId, newStatusId);
+      setEditingJobs(prev => prev.map(job => job.id === jobId ? updatedJob : job));
+    } catch (error) {
+      console.error('Error updating job status:', error);
+    }
+  };
+
+  const handleRequestRevision = async (jobId: string, notes: string) => {
+    try {
+      const updatedJob = await dataManager.addRevisionNote(jobId, notes);
+      setEditingJobs(prev => prev.map(job => job.id === jobId ? updatedJob : job));
+    } catch (error) {
+      console.error('Error adding revision note:', error);
+    }
+  };
+
+  const handleNotifyClientForReview = async (jobId: string) => {
+    try {
+      const updatedJob = await dataManager.addRevisionNote(jobId, 'Client notified for review');
+      setEditingJobs(prev => prev.map(job => job.id === jobId ? updatedJob : job));
+    } catch (error) {
+      console.error('Error notifying client for review:', error);
+    }
+  };
+
+  const handleSaveEditingStatus = async (status: Omit<EditingStatus, 'id'> & { id?: string }) => {
+    try {
+      const saved = await dataManager.saveEditingStatus(status);
+      setEditingStatuses(prev => {
+        const exists = prev.some(s => s.id === saved.id);
+        return exists ? prev.map(s => s.id === saved.id ? saved : s) : [...prev, saved];
+      });
+      return saved;
+    } catch (error) {
+      console.error('Error saving editing status:', error);
+    }
+  };
+
+  const handleDeleteEditingStatus = async (statusId: string) => {
+    try {
+      await dataManager.deleteEditingStatus(statusId);
+      setEditingStatuses(prev => prev.filter(status => status.id !== statusId));
+    } catch (error) {
+      console.error('Error deleting editing status:', error);
+    }
+  };
+
+  const handleSaveSessionPackage = async (categoryId: string, pkg: Omit<SessionPackage, 'id'> & { id?: string }) => {
+    try {
+      await dataManager.saveSessionPackage(categoryId, pkg);
+      const refreshed = await dataManager.getSessionTypes(true);
+      setSessionTypes(refreshed);
+    } catch (error) {
+      console.error('Error saving session package:', error);
+    }
+  };
+
+  const handleDeleteSessionPackage = async (_categoryId: string, packageId: string) => {
+    try {
+      await dataManager.deleteSessionPackage(packageId);
+      const refreshed = await dataManager.getSessionTypes(true);
+      setSessionTypes(refreshed);
+    } catch (error) {
+      console.error('Error deleting session package:', error);
+    }
+  };
+
+  const updateBookingSelections = async (bookingId: string, transform: (selections: PhotoSelection[]) => PhotoSelection[]) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return;
+
+    const updatedSelections = transform(booking.photoSelections || []);
+
+    try {
+      const savedBooking = await dataManager.saveBooking({
+        id: booking.id,
+        clientId: booking.clientId,
+        sessionCategoryId: booking.sessionCategoryId,
+        sessionPackageId: booking.sessionPackageId,
+        photographerId: booking.photographerId,
+        date: booking.date,
+        status: booking.status,
+        notes: booking.notes,
+        location: booking.location,
+        photoSelections: updatedSelections
+      });
+
+      setBookings(prev => prev.map(b => b.id === bookingId ? savedBooking : b));
+    } catch (error) {
+      console.error('Error updating photo selections:', error);
+    }
+  };
+
+  const handleAddPhotoSelection = async (bookingId: string, selectionName: string) => {
+    await updateBookingSelections(bookingId, selections => {
+      if (selections.some(selection => selection.name === selectionName)) {
+        return selections;
+      }
+      return [...selections, { name: selectionName, edited: false }];
+    });
+  };
+
+  const handleRemovePhotoSelection = async (bookingId: string, selectionName: string) => {
+    await updateBookingSelections(bookingId, selections => selections.filter(selection => selection.name !== selectionName));
+  };
+
+  const handleTogglePhotoSelectionEdited = async (bookingId: string, selectionName: string) => {
+    await updateBookingSelections(bookingId, selections => selections.map(selection =>
+      selection.name === selectionName ? { ...selection, edited: !selection.edited } : selection
+    ));
+  };
+
+  const handleFinalizeSelections = async (bookingId: string) => {
+    await updateBookingSelections(bookingId, selections => selections.map(selection => ({ ...selection, edited: true })));
+  };
+
+  const handleBillExpense = async (expenseId: string) => {
+    try {
+      const expense = expenses.find(exp => exp.id === expenseId);
+      if (!expense) return;
+
+      const updatedExpense = await dataManager.saveExpense({
+        id: expense.id,
+        category: expense.category,
+        description: expense.description,
+        amount: expense.amount,
+        date: expense.date,
+        accountId: expense.accountId,
+        bookingId: expense.bookingId,
+        isBilled: true
+      });
+
+      setExpenses(prev => prev.map(exp => exp.id === expenseId ? updatedExpense : exp));
+    } catch (error) {
+      console.error('Error billing expense:', error);
+    }
+  };
+  const handleSaveSettings = async (settings: AppSettings) => {
+    try {
+      const saved = await appSettingsService.upsert(settings);
+      setAppSettings(saved);
+    } catch (e) {
+      console.error('Failed to save settings:', e);
+    }
+  };
+
+  // UI handlers
+  const handlePreviewInvoice = (invoiceId: string, type: 'invoice' | 'receipt' = 'invoice') => {
+    const invoice = invoices.find(i => i.id === invoiceId);
+    if (invoice) {
+      const client = clients.find(c => c.id === invoice.clientId);
+      setPreviewData({ invoice, client: client || null, type });
+    }
+  };
+
   const handleCloseInvoicePreview = () => {
-      setPreviewData({ invoice: null, client: null, type: 'invoice' });
+    setPreviewData({ invoice: null, client: null, type: 'invoice' });
   };
-  
+
   const handleUserChange = (staffId: string) => {
     const newCurrentUser = staff.find(s => s.id === staffId);
     if (newCurrentUser) {
-        setCurrentUser(newCurrentUser);
-        // Reset to dashboard page on user switch to avoid being on a page they don't have access to
-        setActivePage('Dashboard');
-        setSelectedClientId(null);
+      setCurrentUser(newCurrentUser);
+      setActivePage('Dashboard');
+      setSelectedClientId(null);
     }
   };
-  
+
   const handlePageChange = (page: string) => {
     setActivePage(page);
     setSelectedClientId(null);
-    setPageFilters({}); // Clear filters on direct navigation
+    setPageFilters({});
   };
 
   const navigateAndFilter = (page: string, filters: any) => {
     setActivePage(page);
-    setSelectedClientId(null); // Reset client view
+    setSelectedClientId(null);
     setPageFilters({ [page]: filters });
   };
 
-
-  const updateClientStats = (clientId: string, updatedBookings: Booking[], updatedInvoices: Invoice[]) => {
-    setClients(prevClients => prevClients.map(c => {
-        if (c.id === clientId) {
-            const clientBookings = updatedBookings.filter(b => b.clientId === clientId);
-            const clientInvoices = updatedInvoices.filter(inv => inv.clientId === clientId);
-            const totalSpent = clientInvoices.reduce((sum, inv) => sum + inv.amountPaid, 0);
-            return {
-                ...c,
-                totalBookings: clientBookings.length,
-                totalSpent: totalSpent,
-            };
-        }
-        return c;
-    }));
+  const handleViewClient = (clientId: string) => {
+    const user = currentUser ?? DEFAULT_CURRENT_USER;
+    if (hasPermission(user.role, Permission.VIEW_CLIENTS)) {
+      setActivePage('Clients');
+      setSelectedClientId(clientId);
+    }
   };
 
-  const handleSaveClient = (clientToSave: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }): Client | void => {
-    if (clientToSave.id) {
-      // Update existing client
-      setClients(clients.map(c => c.id === clientToSave.id ? { ...c, ...clientToSave } : c));
-    } else {
-      // Add new client
-      const newClient: Client = {
-        ...clientToSave,
-        id: `C${String(clients.length + 1).padStart(3, '0')}`,
-        joinDate: new Date(),
-        totalBookings: 0,
-        totalSpent: 0,
-        avatarUrl: `https://picsum.photos/seed/new-client-${clients.length + 1}/100/100`
+  // Helper and memo that must be declared before any conditional returns to preserve hook order
+  const calculateClientFinancialStatus = (client: Client, clientInvoices: Invoice[]): ClientFinancialStatus => {
+    const hasOverdue = clientInvoices.some(inv => inv.status === 'Overdue');
+    if (hasOverdue) return 'Overdue';
+    if (client.totalSpent > 5000) return 'High Value';
+    return 'Good Standing';
+  };
+
+  const clientsWithFinancialStatus = useMemo(() => {
+    return clients.map(client => {
+      const clientInvoices = invoices.filter(inv => inv.clientId === client.id);
+      return {
+        ...client,
+        financialStatus: calculateClientFinancialStatus(client, clientInvoices)
       };
-      setClients([newClient, ...clients]);
-      return newClient;
-    }
-  };
-  
-  const handleSaveClientNotes = (clientId: string, notes: string) => {
-    setClients(clients.map(c => c.id === clientId ? { ...c, notes } : c));
-  };
-
-  const handleDeleteClient = (clientId: string) => {
-    const updatedBookings = bookings.filter(b => b.clientId !== clientId);
-    const updatedInvoices = invoices.filter(i => i.clientId !== clientId);
-    const updatedEditingJobs = editingJobs.filter(job => !bookings.some(b => b.clientId === clientId && b.id === job.bookingId));
-    
-    setBookings(updatedBookings);
-    setInvoices(updatedInvoices);
-    setEditingJobs(updatedEditingJobs);
-    setClients(clients.filter(c => c.id !== clientId));
-
-    setSelectedClientId(null); // Go back to the list view after deleting
-  };
-
-  const handleSaveBooking = (bookingToSave: Omit<Booking, 'id' | 'clientName' | 'clientAvatarUrl' | 'photographer' | 'invoiceId' | 'sessionType' | 'photoSelections'> & { id?: string }): Booking | void => {
-    const getSessionTypeName = () => {
-        const category = sessionTypes.find(st => st.id === bookingToSave.sessionCategoryId);
-        const pkg = category?.packages.find(p => p.id === bookingToSave.sessionPackageId);
-        return pkg ? `${category?.name} - ${pkg.name}` : 'Unknown Session';
-    }
-
-    let savedBooking: Booking | undefined;
-    let updatedBookings: Booking[];
-    const wasCompleted = bookingToSave.id ? bookings.find(b => b.id === bookingToSave.id)?.status === 'Completed' : false;
-
-    if (bookingToSave.id) {
-        // Update existing booking
-        updatedBookings = bookings.map(b => {
-            if (b.id === bookingToSave.id) {
-                const client = clients.find(c => c.id === bookingToSave.clientId);
-                const photographer = staff.find(s => s.id === bookingToSave.photographerId);
-                const updatedBooking = { 
-                    ...b, 
-                    ...bookingToSave,
-                    clientName: client?.name || 'N/A',
-                    clientAvatarUrl: client?.avatarUrl || '',
-                    photographer: photographer?.name || 'N/A',
-                    sessionType: getSessionTypeName(),
-                };
-                 savedBooking = updatedBooking;
-                 return updatedBooking;
-            }
-            return b;
-        });
-        setBookings(updatedBookings);
-    } else {
-        // Add new booking
-        const client = clients.find(c => c.id === bookingToSave.clientId);
-        const photographer = staff.find(s => s.id === bookingToSave.photographerId);
-        const newBooking: Booking = {
-            ...bookingToSave,
-            id: `B${String(bookings.length + 1).padStart(3, '0')}`,
-            clientName: client?.name || 'N/A',
-            clientAvatarUrl: client?.avatarUrl || `https://picsum.photos/seed/${bookingToSave.clientId}/100/100`,
-            photographer: photographer?.name || 'N/A',
-            invoiceId: '-',
-            sessionType: getSessionTypeName(),
-            photoSelections: [],
-        };
-        updatedBookings = [newBooking, ...bookings];
-        setBookings(updatedBookings);
-        savedBooking = newBooking;
-    }
-        
-    // INTEGRATION: Auto-create editing job when booking is completed
-    if (savedBooking && savedBooking.status === 'Completed' && !wasCompleted) {
-        const jobExists = editingJobs.some(job => job.bookingId === savedBooking!.id);
-        if (!jobExists) {
-            const firstStatus = editingStatuses.find(s => s.name === 'Awaiting Selection') || editingStatuses[0];
-            if(firstStatus) {
-                const newJob: Omit<EditingJob, 'id' | 'editorName' | 'editorAvatarUrl' | 'uploadDate'> = {
-                    bookingId: savedBooking.id,
-                    clientId: savedBooking.clientId,
-                    clientName: savedBooking.clientName,
-                    editorId: null,
-                    statusId: firstStatus.id,
-                };
-                handleSaveEditingJob(newJob);
-
-                const newActivity: Activity = {
-                    id: `A${Date.now()}`,
-                    user: 'System',
-                    userAvatarUrl: 'https://picsum.photos/seed/system/100/100',
-                    action: 'created editing job for',
-                    target: `${savedBooking.clientName} (${savedBooking.id})`,
-                    timestamp: new Date(),
-                };
-                setActivities([newActivity, ...activities]);
-            }
-        }
-    }
-
-
-    // Update client stats
-    if (savedBooking) {
-        updateClientStats(savedBooking.clientId, updatedBookings, invoices);
-        return savedBooking;
-    }
-  };
-
-  const handleSavePhotographerNotes = (bookingId: string, notes: string) => {
-    setEditingJobs(prevJobs => {
-        const jobsForBooking = prevJobs.filter(j => j.bookingId === bookingId).sort((a,b) => b.uploadDate.getTime() - a.uploadDate.getTime());
-        if (jobsForBooking.length === 0) {
-            console.warn(`No editing job found for booking ${bookingId} to save photographer notes.`);
-            return prevJobs;
-        }
-        const jobToUpdateId = jobsForBooking[0].id;
-
-        return prevJobs.map(job => 
-            job.id === jobToUpdateId ? { ...job, photographerNotes: notes } : job
-        );
     });
-};
+  }, [clients, invoices]);
+
+  const safeCurrentUser = currentUser ?? DEFAULT_CURRENT_USER;
+
+  // Filter data based on user role
+  const visibleBookings = hasPermission(safeCurrentUser.role, Permission.VIEW_BOOKINGS_ALL)
+    ? bookings
+    : bookings.filter(b => b.photographerId === safeCurrentUser.id);
+
+  const visibleEditingJobs = hasPermission(safeCurrentUser.role, Permission.VIEW_EDITING_ALL)
+    ? editingJobs
+    : editingJobs.filter(m => m.editorId === safeCurrentUser.id);
 
 
-  const handleDeleteBooking = (bookingId: string) => {
-      const booking = bookings.find(b => b.id === bookingId);
-      if (!booking) return;
-
-      const { clientId } = booking;
-      let updatedInvoices = invoices;
-      
-      // Also unlink from any invoice
-      if (booking.invoiceId !== '-') {
-          updatedInvoices = invoices.filter(i => i.id !== booking.invoiceId);
-          setInvoices(updatedInvoices);
-      }
-      const updatedBookings = bookings.filter(b => b.id !== bookingId);
-      setBookings(updatedBookings);
-      
-      // Update client stats after booking deletion
-      updateClientStats(clientId, updatedBookings, updatedInvoices);
-  };
-
-  const handleSaveStaff = (staffToSave: Omit<StaffMember, 'id' | 'status' | 'lastLogin' | 'avatarUrl'> & { id?: string }) => {
-    if (staffToSave.id) {
-        // Update existing staff
-        setStaff(staff.map(s => s.id === staffToSave.id ? { ...s, ...staffToSave } : s));
-    } else {
-        // Add new staff
-        const newStaff: StaffMember = {
-            ...staffToSave,
-            id: `S${String(staff.length + 1).padStart(3, '0')}`,
-            status: 'Invited',
-            lastLogin: new Date(), // This would be null in a real app until first login
-            avatarUrl: `https://picsum.photos/seed/new-staff-${staff.length + 1}/100/100`,
-        };
-        setStaff([newStaff, ...staff]);
-    }
-  };
-
-  const handleDeleteStaff = (staffId: string) => {
-      // Un-assign from any bookings
-      setBookings(prev => prev.map(b => b.photographerId === staffId ? { ...b, photographerId: '', photographer: 'Unassigned' } : b));
-      // Un-assign from any editing jobs
-      setEditingJobs(prev => prev.map(job => job.editorId === staffId ? { ...job, editorId: null, editorName: 'Unassigned', editorAvatarUrl: 'https://picsum.photos/seed/user-unassigned/100/100' } : job));
-      
-      setStaff(staff.filter(s => s.id !== staffId));
-  };
-
-  const handleSaveInvoice = (invoiceToSave: Omit<Invoice, 'id' | 'clientName' | 'clientAvatarUrl' | 'amount' | 'amountPaid' | 'payments' | 'lastReminderSent'> & { id?: string }) => {
-    const client = clients.find(c => c.id === invoiceToSave.clientId);
-    if (!client) return;
-    
-    // Calculate total amount from items
-    const totalAmount = invoiceToSave.items.reduce((sum, item) => sum + item.quantity * item.price, 0);
-    let updatedInvoices: Invoice[];
-
-    if (invoiceToSave.id) {
-        // Update existing invoice
-        const existingInvoice = invoices.find(i => i.id === invoiceToSave.id);
-        updatedInvoices = invoices.map(i => i.id === invoiceToSave.id ? { 
-            ...i, 
-            ...invoiceToSave,
-            amount: totalAmount,
-            clientName: client.name,
-            clientAvatarUrl: client.avatarUrl,
-            amountPaid: existingInvoice?.amountPaid || 0,
-            payments: existingInvoice?.payments || [],
-            lastReminderSent: existingInvoice?.lastReminderSent,
-        } : i);
-        setInvoices(updatedInvoices);
-    } else {
-        // Add new invoice
-        const newInvoiceId = `${appSettings.invoiceSettings.prefix}${String(invoices.length + 1).padStart(3, '0')}`;
-        const newInvoice: Invoice = {
-            ...invoiceToSave,
-            id: newInvoiceId,
-            amount: totalAmount,
-            clientName: client.name,
-            clientAvatarUrl: client.avatarUrl,
-            amountPaid: 0,
-            payments: [],
-            lastReminderSent: null,
-        };
-        updatedInvoices = [newInvoice, ...invoices];
-        setInvoices(updatedInvoices);
-        // Link invoice to booking
-        setBookings(bookings.map(b => b.id === invoiceToSave.bookingId ? { ...b, invoiceId: newInvoiceId } : b));
-    }
-     // Update client stats
-     updateClientStats(invoiceToSave.clientId, bookings, updatedInvoices);
-  };
-
-  const handleDeleteInvoice = (invoiceId: string) => {
-    const invoiceToDelete = invoices.find(i => i.id === invoiceId);
-    if (!invoiceToDelete) return;
-
-    // Unlink invoice from booking
-    setBookings(bookings.map(b => b.id === invoiceToDelete.bookingId ? { ...b, invoiceId: '-' } : b));
-    // Delete invoice
-    const updatedInvoices = invoices.filter(i => i.id !== invoiceId);
-    setInvoices(updatedInvoices);
-    
-    // Update client stats
-    updateClientStats(invoiceToDelete.clientId, bookings, updatedInvoices);
-  };
-
-  const handleCreateInvoiceFromBooking = (bookingId: string): Invoice | void => {
-    const booking = bookings.find(b => b.id === bookingId);
-    if (!booking || booking.invoiceId !== '-') {
-        alert("This booking is not eligible for invoice creation.");
-        return;
+  const renderContent = () => {
+    const requiredPermission = PAGE_PERMISSIONS[activePage];
+    if (requiredPermission && !hasPermission(safeCurrentUser.role, requiredPermission)) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+          </svg>
+          <h2 className="mt-4 text-2xl font-bold text-white">Access Denied</h2>
+          <p className="mt-2 text-slate-400">You do not have permission to view the {activePage} page.</p>
+        </div>
+      );
     }
 
-    const client = clients.find(c => c.id === booking.clientId);
-    if (!client) {
-        alert("Could not find the client for this booking.");
-        return;
-    }
-
-    let packagePrice = 0;
-    const category = sessionTypes.find(st => st.id === booking.sessionCategoryId);
-    const pkg = category?.packages.find(p => p.id === booking.sessionPackageId);
-    if (pkg) {
-        packagePrice = pkg.price;
-    }
-    
-    const newItem: InvoiceItem = {
-        id: `item-${Date.now()}`,
-        description: booking.sessionType,
-        quantity: 1,
-        price: packagePrice
-    };
-
-    const newInvoiceId = `${appSettings.invoiceSettings.prefix}${String(invoices.length + 1).padStart(3, '0')}`;
-    const issueDate = new Date();
-    const dueDate = new Date(issueDate);
-    dueDate.setDate(issueDate.getDate() + appSettings.invoiceSettings.defaultDueDays);
-
-    const newInvoice: Invoice = {
-        id: newInvoiceId,
-        bookingId: booking.id,
-        clientId: booking.clientId,
-        clientName: client.name,
-        clientAvatarUrl: client.avatarUrl,
-        items: [newItem],
-        amount: packagePrice,
-        amountPaid: 0,
-        issueDate: issueDate,
-        dueDate: dueDate,
-        status: 'Sent',
-        payments: [],
-        lastReminderSent: null,
-    };
-
-    const updatedInvoices = [newInvoice, ...invoices];
-    setInvoices(updatedInvoices);
-    setBookings(bookings.map(b => b.id === bookingId ? { ...b, invoiceId: newInvoiceId } : b));
-    
-    const newActivity: Activity = {
-        id: `A${Date.now()}`,
-        user: currentUser.name,
-        userAvatarUrl: currentUser.avatarUrl,
-        action: 'created invoice',
-        target: `${newInvoiceId} for ${client.name}`,
-        timestamp: new Date(),
-    };
-    setActivities([newActivity, ...activities]);
-
-    // Update client stats
-    updateClientStats(newInvoice.clientId, bookings, updatedInvoices);
-
-    return newInvoice;
-  };
-
-  const handleRecordPayment = (invoiceId: string, paymentData: Omit<Payment, 'id' | 'recordedBy'>) => {
-    const invoiceToUpdate = invoices.find(inv => inv.id === invoiceId);
-    if (!invoiceToUpdate) return;
-    
-    const newPayment: Payment = {
-        ...paymentData,
-        id: `PAY${Date.now()}`,
-        recordedBy: currentUser.name,
-    };
-
-    const updatedInvoices = invoices.map(inv => {
-        if (inv.id === invoiceId) {
-            const updatedPayments = [...(inv.payments || []), newPayment];
-            const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
-            const newStatus = totalPaid >= inv.amount ? 'Paid' : inv.status;
-
-            return {
-                ...inv,
-                payments: updatedPayments,
-                amountPaid: totalPaid,
-                status: newStatus,
-            };
-        }
-        return inv;
-    });
-
-    setInvoices(updatedInvoices);
-
-    const newActivity: Activity = {
-        id: `A${Date.now()}`,
-        user: currentUser.name,
-        userAvatarUrl: currentUser.avatarUrl,
-        action: 'recorded a payment for',
-        target: `invoice ${invoiceId} for ${invoiceToUpdate.clientName}`,
-        timestamp: new Date(),
-    };
-    setActivities([newActivity, ...activities]);
-
-    // Update client stats
-    updateClientStats(invoiceToUpdate.clientId, bookings, updatedInvoices);
-  };
-
-    const handleSaveExpense = (expenseToSave: Omit<Expense, 'id'> & { id?: string }) => {
-        if (expenseToSave.id) {
-            setExpenses(expenses.map(e => e.id === expenseToSave.id ? { ...e, ...expenseToSave } : e));
-        } else {
-            const newExpense: Expense = {
-                ...expenseToSave,
-                id: `E${Date.now()}`,
-            };
-            setExpenses([newExpense, ...expenses]);
-        }
-    };
-
-    const handleDeleteExpense = (expenseId: string) => {
-        setExpenses(expenses.filter(e => e.id !== expenseId));
-    };
-
-    const handleBillExpense = (expenseId: string) => {
-        const expense = expenses.find(e => e.id === expenseId);
-        if (!expense || expense.isBilled) {
-            alert("This expense cannot be billed or has already been billed.");
-            return;
-        }
-    
-        if (!expense.bookingId) {
-            alert("This expense is not associated with any booking.");
-            return;
-        }
-    
-        const booking = bookings.find(b => b.id === expense.bookingId);
-        if (!booking) {
-            alert("Could not find the booking associated with this expense.");
-            return;
-        }
-    
-        if (booking.invoiceId === '-') {
-            alert(`Booking ${booking.id} does not have an invoice yet. Please create an invoice for this booking first.`);
-            return;
-        }
-    
-        const invoice = invoices.find(i => i.id === booking.invoiceId);
-        if (!invoice) {
-            alert(`Could not find the invoice ${booking.invoiceId}.`);
-            return;
-        }
-        
-        if (invoice.items.some(item => item.id === `exp-${expense.id}`)) {
-            alert("This expense item has already been added to the invoice.");
-            return;
-        }
-    
-        const newInvoiceItem: InvoiceItem = {
-            id: `exp-${expense.id}`,
-            description: `Reimbursable Expense: ${expense.description}`,
-            quantity: 1,
-            price: expense.amount
-        };
-    
-        const updatedInvoices = invoices.map(inv => {
-            if (inv.id === invoice.id) {
-                const updatedItems = [...inv.items, newInvoiceItem];
-                const newTotalAmount = updatedItems.reduce((sum, item) => sum + item.quantity * item.price, 0);
-                return {
-                    ...inv,
-                    items: updatedItems,
-                    amount: newTotalAmount
-                };
-            }
-            return inv;
-        });
-    
-        const updatedExpenses = expenses.map(exp => {
-            if (exp.id === expenseId) {
-                return { ...exp, isBilled: true };
-            }
-            return exp;
-        });
-    
-        setInvoices(updatedInvoices);
-        setExpenses(updatedExpenses);
-    
-        const newActivity: Activity = {
-            id: `A${Date.now()}`,
-            user: currentUser.name,
-            userAvatarUrl: currentUser.avatarUrl,
-            action: 'billed an expense to invoice',
-            target: `${invoice.id} for ${invoice.clientName}`,
-            timestamp: new Date(),
-        };
-        setActivities([newActivity, ...activities]);
-        
-        updateClientStats(invoice.clientId, bookings, updatedInvoices);
-    
-        alert(`Expense "${expense.description}" has been added to invoice ${invoice.id}.`);
-    };
-
-  const handleSaveSessionCategory = (categoryToSave: Omit<SessionCategory, 'packages'> & { id?: string }) => {
-    if (categoryToSave.id) {
-        setSessionTypes(sessionTypes.map(st => st.id === categoryToSave.id ? { ...st, name: categoryToSave.name } : st));
-    } else {
-        const newCategory: SessionCategory = {
-            id: `SC${Date.now()}`,
-            name: categoryToSave.name,
-            packages: [],
-        };
-        setSessionTypes([...sessionTypes, newCategory]);
-    }
-  };
-  
-  const handleDeleteSessionCategory = (categoryId: string) => {
-    if (bookings.some(b => b.sessionCategoryId === categoryId)) {
-        alert("Cannot delete category. It is currently used in one or more bookings.");
-        return;
-    }
-    setSessionTypes(sessionTypes.filter(st => st.id !== categoryId));
-  };
-
-  const handleSaveSessionPackage = (categoryId: string, packageToSave: Omit<SessionPackage, 'id'> & { id?: string }) => {
-    setSessionTypes(sessionTypes.map(st => {
-        if (st.id === categoryId) {
-            if (packageToSave.id) {
-                // Update existing package
-                const updatedPackages = st.packages.map(p => p.id === packageToSave.id ? { ...p, ...packageToSave } : p);
-                return { ...st, packages: updatedPackages };
-            } else {
-                // Add new package
-                const newPackage: SessionPackage = {
-                    ...packageToSave,
-                    id: `SP${Date.now()}`,
-                };
-                return { ...st, packages: [...st.packages, newPackage] };
-            }
-        }
-        return st;
-    }));
-  };
-
-  const handleDeleteSessionPackage = (categoryId: string, packageId: string) => {
-    if (bookings.some(b => b.sessionPackageId === packageId)) {
-        alert("Cannot delete package. It is currently used in one or more bookings.");
-        return;
-    }
-    setSessionTypes(sessionTypes.map(st => {
-        if (st.id === categoryId) {
-            const updatedPackages = st.packages.filter(p => p.id !== packageId);
-            return { ...st, packages: updatedPackages };
-        }
-        return st;
-    }));
-  };
-  
-    const handleSaveEditingJob = (jobToSave: Omit<EditingJob, 'id' | 'clientName' | 'editorName' | 'editorAvatarUrl' | 'uploadDate'> & { id?: string }) => {
-        const getEditorInfo = (editorId: string | null) => {
-            const editor = staff.find(s => s.id === editorId);
-            return editor ? { name: editor.name, avatarUrl: editor.avatarUrl } : { name: 'Unassigned', avatarUrl: 'https://picsum.photos/seed/user-unassigned/100/100' };
-        }
-        
-        const getClientInfo = (bookingId: string) => {
-            const booking = bookings.find(b => b.id === bookingId);
-            return booking ? { clientName: booking.clientName, clientId: booking.clientId } : { clientName: 'N/A', clientId: '' };
-        }
-
-        if (jobToSave.id) {
-            // Update existing asset
-            setEditingJobs(editingJobs.map(job => {
-                if (job.id === jobToSave.id) {
-                    const editorInfo = getEditorInfo(jobToSave.editorId);
-                    const clientInfo = getClientInfo(jobToSave.bookingId);
-                    return {
-                        ...job,
-                        ...jobToSave,
-                        editorName: editorInfo.name,
-                        editorAvatarUrl: editorInfo.avatarUrl,
-                        clientName: clientInfo.clientName,
-                        clientId: clientInfo.clientId,
-                    }
-                }
-                return job;
-            }));
-        } else {
-            // Add new asset
-            const editorInfo = getEditorInfo(jobToSave.editorId);
-            const clientInfo = getClientInfo(jobToSave.bookingId);
-            const newJob: EditingJob = {
-                ...jobToSave,
-                id: `M${String(editingJobs.length + 1).padStart(3, '0')}`,
-                clientName: clientInfo.clientName,
-                clientId: clientInfo.clientId,
-                editorName: editorInfo.name,
-                editorAvatarUrl: editorInfo.avatarUrl,
-                uploadDate: new Date(),
-                revisionCount: 0,
-                revisionNotes: [],
-            };
-            setEditingJobs([newJob, ...editingJobs]);
-        }
-    };
-
-    const handleDeleteEditingJob = (jobId: string) => {
-        setEditingJobs(editingJobs.filter(job => job.id !== jobId));
-    };
-
-    const handleUpdateEditingJobStatus = (jobId: string, newStatusId: string) => {
-        setEditingJobs(editingJobs.map(job => job.id === jobId ? { ...job, statusId: newStatusId } : job));
-    };
-
-    const handleRequestRevision = (jobId: string, notes: string) => {
-        const inProgressStatus = editingStatuses.find(s => s.name === 'In Progress');
-        if (!inProgressStatus) {
-            console.error("Critical: 'In Progress' status is not defined.");
-            alert("Configuration error: 'In Progress' status is missing.");
-            return;
-        }
-
-        setEditingJobs(prevJobs => prevJobs.map(job => {
-            if (job.id === jobId) {
-                const newRevisionNotes = [
-                    ...(job.revisionNotes || []),
-                    { note: notes, date: new Date() }
-                ];
-                const newRevisionCount = (job.revisionCount || 0) + 1;
-                return {
-                    ...job,
-                    statusId: inProgressStatus.id,
-                    revisionCount: newRevisionCount,
-                    revisionNotes: newRevisionNotes,
-                };
-            }
-            return job;
-        }));
-
-        const job = editingJobs.find(j => j.id === jobId);
-        const newActivity: Activity = {
-            id: `A${Date.now()}`,
-            user: currentUser.name,
-            userAvatarUrl: currentUser.avatarUrl,
-            action: 'requested a revision on job',
-            target: `${job?.clientName || 'N/A'} (${job?.bookingId || ''})`,
-            timestamp: new Date(),
-        };
-        setActivities(prev => [newActivity, ...prev]);
-    };
-
-    const handleNotifyClientForReview = (jobId: string) => {
-        const job = editingJobs.find(j => j.id === jobId);
-        if (job) {
-             const client = clients.find(c => c.id === job.clientId);
-             const booking = bookings.find(b => b.id === job.bookingId);
-
-             if (client && client.phone) {
-                 let phoneNumber = client.phone.replace(/[^0-9]/g, '');
-                 if (phoneNumber.startsWith('0')) {
-                     phoneNumber = '62' + phoneNumber.substring(1);
-                 } else if (!phoneNumber.startsWith('62')) {
-                     // This is a simple guess for mock data, not robust for real-world numbers
-                     phoneNumber = '62' + phoneNumber; 
-                 }
-                 
-                 const sessionInfo = booking ? `dari sesi foto '${booking.sessionType}'` : '';
-                 const reviewLink = `https://lensledger.app/review/${job.id}/${client.id}`; // Simulated link
-                 const message = `Halo ${client.name}, foto Anda ${sessionInfo} sudah siap untuk direview. Silakan klik link berikut untuk melihat dan memberikan masukan:\n\n${reviewLink}\n\nTerima kasih,\n${appSettings.companyProfile.name}`;
-                 
-                 const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
-                 window.open(whatsappUrl, '_blank');
-
-                 const newActivity: Activity = {
-                    id: `A${Date.now()}`,
-                    user: currentUser.name,
-                    userAvatarUrl: currentUser.avatarUrl,
-                    action: 'notified client via WhatsApp for review on job',
-                    target: `${job.clientName} (${job.bookingId})`,
-                    timestamp: new Date(),
-                };
-                setActivities([newActivity, ...activities]);
-
-             } else {
-                 alert(`Could not send notification. Client ${client?.name || 'Unknown'} does not have a valid phone number registered.`);
-             }
-        }
-    };
-
-    const handleSaveEditingStatus = (statusToSave: Omit<EditingStatus, 'id'> & {id?: string}) => {
-        if (statusToSave.id) {
-            setEditingStatuses(editingStatuses.map(s => s.id === statusToSave.id ? { ...s, ...statusToSave } : s));
-        } else {
-            const newStatus: EditingStatus = {
-                ...statusToSave,
-                id: `status-${Date.now()}`,
-            };
-            setEditingStatuses([...editingStatuses, newStatus]);
-        }
-    };
-    
-    const handleDeleteEditingStatus = (statusId: string) => {
-        // You might want to add logic here to prevent deleting a status that's in use
-        if (editingJobs.some(job => job.statusId === statusId)) {
-            alert("Cannot delete a status that is currently in use by an editing job.");
-            return;
-        }
-        setEditingStatuses(editingStatuses.filter(s => s.id !== statusId));
-    };
-
-    const handleAddPhotoSelection = (bookingId: string, selectionName: string) => {
-        setBookings(bookings.map(b => {
-            if (b.id === bookingId) {
-                const newSelection: PhotoSelection = { name: selectionName, edited: false };
-                const updatedSelections = [...(b.photoSelections || []), newSelection];
-                return { ...b, photoSelections: updatedSelections };
-            }
-            return b;
-        }));
-    };
-    
-    const handleRemovePhotoSelection = (bookingId: string, selectionNameToRemove: string) => {
-        setBookings(bookings.map(b => {
-            if (b.id === bookingId) {
-                const updatedSelections = (b.photoSelections || []).filter(s => s.name !== selectionNameToRemove);
-                return { ...b, photoSelections: updatedSelections };
-            }
-            return b;
-        }));
-    };
-
-    const handleTogglePhotoSelectionEdited = (bookingId: string, selectionName: string) => {
-        setBookings(bookings.map(b => {
-            if (b.id === bookingId) {
-                const updatedSelections = (b.photoSelections || []).map(s => 
-                    s.name === selectionName ? { ...s, edited: !s.edited } : s
-                );
-                return { ...b, photoSelections: updatedSelections };
-            }
-            return b;
-        }));
-    };
-
-    const handleFinalizeSelections = (bookingId: string) => {
-        const booking = bookings.find(b => b.id === bookingId);
-        if (!booking) {
-            alert("Booking not found.");
-            return;
-        }
-
-        if (!booking.photoSelections || booking.photoSelections.length === 0) {
-            alert("Please add photo selections before finalizing.");
-            return;
-        }
-
-        const readyForEditStatus = editingStatuses.find(s => s.name === 'Ready for Edit');
-        if (!readyForEditStatus) {
-            console.error("Critical: 'Ready for Edit' status is not defined in settings.");
-            alert("Configuration error: 'Ready for Edit' status is missing.");
-            return;
-        }
-        
-        const awaitingSelectionStatus = editingStatuses.find(s => s.name === 'Awaiting Selection');
-        if (!awaitingSelectionStatus) {
-            console.error("Critical: 'Awaiting Selection' status is not defined.");
-            // Less critical, but we can still proceed
-        }
-
-        const jobToUpdate = editingJobs.find(job => 
-            job.bookingId === bookingId && 
-            (!awaitingSelectionStatus || job.statusId === awaitingSelectionStatus.id)
-        );
-
-        if (jobToUpdate) {
-            setEditingJobs(prevJobs => prevJobs.map(job => 
-                job.id === jobToUpdate.id ? { ...job, statusId: readyForEditStatus.id } : job
-            ));
-
-            const client = clients.find(c => c.id === booking.clientId);
-            const newActivity: Activity = {
-                id: `A${Date.now()}`,
-                user: 'System',
-                userAvatarUrl: 'https://picsum.photos/seed/system/100/100',
-                action: `marked job for booking ${jobToUpdate.bookingId} as ready for editing`,
-                target: `${client?.name || 'N/A'}`,
-                timestamp: new Date(),
-            };
-            setActivities(prev => [newActivity, ...prev]);
-
-            alert(`Editing job ${jobToUpdate.id} for ${client?.name} is now marked as 'Ready for Edit'.`);
-        } else {
-            alert("No editing jobs for this booking are currently awaiting photo selection.");
-        }
-    };
-
-    const handleSavePaymentAccount = (accountToSave: Omit<PaymentAccount, 'id'> & { id?: string }) => {
-        if (accountToSave.id) {
-            setPaymentAccounts(paymentAccounts.map(acc => acc.id === accountToSave.id ? { ...acc, ...accountToSave } : acc));
-        } else {
-            const newAccount: PaymentAccount = {
-                ...accountToSave,
-                id: `PA${Date.now()}`,
-            };
-            setPaymentAccounts([...paymentAccounts, newAccount]);
-        }
-    };
-
-    const handleDeletePaymentAccount = (accountId: string) => {
-        if (invoices.some(inv => inv.payments?.some(p => p.accountId === accountId))) {
-            alert("Cannot delete an account that has payments recorded to it in invoices.");
-            return;
-        }
-        if (expenses.some(exp => exp.accountId === accountId)) {
-            alert("Cannot delete an account that has expenses recorded from it.");
-            return;
-        }
-        setPaymentAccounts(paymentAccounts.filter(acc => acc.id !== accountId));
-    };
-
-    const handleSaveSettings = (settings: AppSettings) => {
-        setAppSettings(settings);
-        // Here you would typically also make an API call to save settings to a backend.
-    };
-
-
-    const handleViewClient = (clientId: string) => {
-        if (hasPermission(currentUser.role, Permission.VIEW_CLIENTS)) {
-            setActivePage('Clients');
-            setSelectedClientId(clientId);
-        }
-    }
-    
-    // Filter data based on user role
-    const visibleBookings = hasPermission(currentUser.role, Permission.VIEW_BOOKINGS_ALL)
-        ? bookings
-        : bookings.filter(b => b.photographerId === currentUser.id);
-
-    const visibleEditingJobs = hasPermission(currentUser.role, Permission.VIEW_EDITING_ALL)
-        ? editingJobs
-        : editingJobs.filter(m => m.editorId === currentUser.id);
-
-    const calculateClientFinancialStatus = (client: Client, clientInvoices: Invoice[]): ClientFinancialStatus => {
-        const hasOverdue = clientInvoices.some(inv => inv.status === 'Overdue');
-        if (hasOverdue) return 'Overdue';
-        if (client.totalSpent > 5000) return 'High Value';
-        return 'Good Standing';
-    };
-
-    const clientsWithFinancialStatus = useMemo(() => {
-        return clients.map(client => {
-            const clientInvoices = invoices.filter(inv => inv.clientId === client.id);
-            return {
-                ...client,
-                financialStatus: calculateClientFinancialStatus(client, clientInvoices)
-            };
-        });
-    }, [clients, invoices]);
-
-    const renderContent = () => {
-        const requiredPermission = PAGE_PERMISSIONS[activePage];
-        if (requiredPermission && !hasPermission(currentUser.role, requiredPermission)) {
-            return (
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                    </svg>
-                    <h2 className="mt-4 text-2xl font-bold text-white">Access Denied</h2>
-                    <p className="mt-2 text-slate-400">You do not have permission to view the {activePage} page.</p>
-                </div>
-            );
-        }
-
-    if (selectedClientId && hasPermission(currentUser.role, Permission.VIEW_CLIENTS)) {
+    if (selectedClientId && hasPermission(safeCurrentUser.role, Permission.VIEW_CLIENTS)) {
       const client = clientsWithFinancialStatus.find(c => c.id === selectedClientId);
       if (client) {
         return <ClientProfilePage
@@ -973,7 +941,7 @@ const App: React.FC = () => {
           editingStatuses={editingStatuses}
           expenses={expenses}
           activities={activities}
-          currentUser={currentUser}
+          currentUser={safeCurrentUser}
           onBack={() => setSelectedClientId(null)}
           onSaveClient={handleSaveClient}
           onDeleteClient={handleDeleteClient}
@@ -988,7 +956,6 @@ const App: React.FC = () => {
       }
     }
 
-
     switch (activePage) {
       case 'Dashboard':
         return <Dashboard 
@@ -997,7 +964,7 @@ const App: React.FC = () => {
           editingJobs={editingJobs}
           activities={activities} 
           revenueData={revenueData} 
-          currentUser={currentUser}
+          currentUser={safeCurrentUser}
           setActivePage={handlePageChange}
           navigateAndFilter={navigateAndFilter}
         />;
@@ -1009,7 +976,7 @@ const App: React.FC = () => {
           sessionTypes={sessionTypes}
           paymentAccounts={paymentAccounts}
           invoices={invoices}
-          currentUser={currentUser}
+          currentUser={safeCurrentUser}
           onSaveBooking={handleSaveBooking}
           onDeleteBooking={handleDeleteBooking}
           onSaveClient={handleSaveClient}
@@ -1023,7 +990,7 @@ const App: React.FC = () => {
       case 'Clients':
         return <ClientsPage 
           clients={clientsWithFinancialStatus} 
-          currentUser={currentUser}
+          currentUser={safeCurrentUser}
           onSaveClient={handleSaveClient} 
           onDeleteClient={handleDeleteClient}
           onViewProfile={setSelectedClientId}
@@ -1035,7 +1002,7 @@ const App: React.FC = () => {
           clients={clients}
           sessionTypes={sessionTypes}
           paymentAccounts={paymentAccounts}
-          currentUser={currentUser}
+          currentUser={safeCurrentUser}
           onSaveInvoice={handleSaveInvoice}
           onDeleteInvoice={handleDeleteInvoice}
           onRecordPayment={handleRecordPayment}
@@ -1045,29 +1012,29 @@ const App: React.FC = () => {
         />;
       case 'Expenses':
         return <ExpensesPage
-            expenses={expenses}
-            bookings={bookings}
-            paymentAccounts={paymentAccounts}
-            currentUser={currentUser}
-            onSaveExpense={handleSaveExpense}
-            onDeleteExpense={handleDeleteExpense}
-            onBillExpense={handleBillExpense}
+          expenses={expenses}
+          bookings={bookings}
+          paymentAccounts={paymentAccounts}
+          currentUser={safeCurrentUser}
+          onSaveExpense={handleSaveExpense}
+          onDeleteExpense={handleDeleteExpense}
+          onBillExpense={handleBillExpense}
         />;
       case 'Editing':
         return <EditingWorkflowPage 
-            jobs={visibleEditingJobs} 
-            bookings={bookings}
-            staff={staff}
-            clients={clients}
-            editingStatuses={editingStatuses}
-            currentUser={currentUser}
-            onSaveJob={handleSaveEditingJob}
-            onDeleteJob={handleDeleteEditingJob}
-            onUpdateJobStatus={handleUpdateEditingJobStatus}
-            onViewClient={handleViewClient}
-            onNotifyClientForReview={handleNotifyClientForReview}
-            onRequestRevision={handleRequestRevision}
-            initialFilters={pageFilters['Editing']}
+          jobs={visibleEditingJobs} 
+          bookings={bookings}
+          staff={staff}
+          clients={clients}
+          editingStatuses={editingStatuses}
+          currentUser={safeCurrentUser}
+          onSaveJob={handleSaveEditingJob}
+          onDeleteJob={handleDeleteEditingJob}
+          onUpdateJobStatus={handleUpdateEditingJobStatus}
+          onViewClient={handleViewClient}
+          onNotifyClientForReview={handleNotifyClientForReview}
+          onRequestRevision={handleRequestRevision}
+          initialFilters={pageFilters['Editing']}
         />;
       case 'Reports':
         return <ReportsPage 
@@ -1079,34 +1046,34 @@ const App: React.FC = () => {
           staff={staff}
           editingJobs={editingJobs}
           editingStatuses={editingStatuses}
-          currentUser={currentUser}
+          currentUser={safeCurrentUser}
           navigateAndFilter={navigateAndFilter}
         />;
       case 'Staff':
         return <StaffPage 
           staff={staff}
-          currentUser={currentUser}
+          currentUser={safeCurrentUser}
           onSaveStaff={handleSaveStaff}
           onDeleteStaff={handleDeleteStaff}
-         />;
+        />;
       case 'Settings':
         return <SettingsPage 
-            sessionCategories={sessionTypes}
-            editingStatuses={editingStatuses}
-            paymentAccounts={paymentAccounts}
-            appSettings={appSettings}
-            bookings={bookings}
-            editingJobs={editingJobs}
-            currentUser={currentUser}
-            onSaveCategory={handleSaveSessionCategory}
-            onDeleteCategory={handleDeleteSessionCategory}
-            onSavePackage={handleSaveSessionPackage}
-            onDeletePackage={handleDeleteSessionPackage}
-            onSaveStatus={handleSaveEditingStatus}
-            onDeleteStatus={handleDeleteEditingStatus}
-            onSavePaymentAccount={handleSavePaymentAccount}
-            onDeletePaymentAccount={handleDeletePaymentAccount}
-            onSaveSettings={handleSaveSettings}
+          sessionCategories={sessionTypes}
+          editingStatuses={editingStatuses}
+          paymentAccounts={paymentAccounts}
+          appSettings={appSettings}
+          bookings={bookings}
+          editingJobs={editingJobs}
+          currentUser={safeCurrentUser}
+          onSaveCategory={handleSaveSessionCategory}
+          onDeleteCategory={handleDeleteSessionCategory}
+          onSavePackage={handleSaveSessionPackage}
+          onDeletePackage={handleDeleteSessionPackage}
+          onSaveStatus={handleSaveEditingStatus}
+          onDeleteStatus={handleDeleteEditingStatus}
+          onSavePaymentAccount={handleSavePaymentAccount}
+          onDeletePaymentAccount={handleDeletePaymentAccount}
+          onSaveSettings={handleSaveSettings}
         />;
       default:
         return <Dashboard 
@@ -1115,44 +1082,75 @@ const App: React.FC = () => {
           editingJobs={editingJobs}
           activities={activities} 
           revenueData={revenueData} 
-          currentUser={currentUser}
+          currentUser={safeCurrentUser}
           setActivePage={handlePageChange}
           navigateAndFilter={navigateAndFilter}
         />;
     }
   };
 
-  return (
-    <div className="flex h-screen bg-slate-900 text-slate-100 font-sans">
-      <Sidebar 
-        activePage={activePage} 
-        setActivePage={handlePageChange} 
-        currentUser={currentUser} 
-        isOpen={isSidebarOpen}
-        setIsOpen={setIsSidebarOpen}
-      />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header 
-          currentUser={currentUser} 
-          allStaff={staff} 
-          onUserChange={handleUserChange}
-          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-900 p-4 sm:p-8">
-          {renderContent()}
-        </main>
+  if (isCheckingAuth) {
+    return (
+      <div className="flex h-screen bg-slate-900 text-slate-100 items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-20 w-20 border-b-2 border-cyan-500 mb-4 mx-auto"></div>
+          <h2 className="text-xl font-semibold mb-2">Menyiapkan PhotoLens...</h2>
+          <p className="text-slate-400">Memeriksa sesi pengguna yang aktif.</p>
+        </div>
       </div>
-       {previewData.invoice && previewData.client && (
-          <InvoicePreviewModal
+    );
+  }
+
+  return (
+    <NotificationProvider>
+      {!session ? (
+        <AuthPage onAuthSuccess={handleAuthSuccess} />
+      ) : showSetupWizard ? (
+        <InitialSetupWizard onComplete={handleSetupComplete} />
+      ) : isLoading ? (
+        <div className="flex h-screen bg-slate-900 text-slate-100 items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-20 w-20 border-b-2 border-cyan-500 mb-4 mx-auto"></div>
+            <h2 className="text-xl font-semibold mb-2">Memuat data PhotoLens...</h2>
+            <p className="text-slate-400">
+              {!dbConnected ? 'Menghubungkan ke database...' : 'Mengambil data terbaru dari Supabase.'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex h-screen bg-slate-900 text-slate-100 font-sans">
+          <Sidebar
+            activePage={activePage}
+            setActivePage={handlePageChange}
+            currentUser={safeCurrentUser}
+            isOpen={isSidebarOpen}
+            setIsOpen={setIsSidebarOpen}
+          />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <Header
+              currentUser={safeCurrentUser}
+              allStaff={staff}
+              onUserChange={handleUserChange}
+              onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+              onSignOut={handleSignOut}
+            />
+            <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-900 p-4 sm:p-8">
+              {renderContent()}
+            </main>
+          </div>
+          {previewData.invoice && previewData.client && (
+            <InvoicePreviewModal
               invoice={previewData.invoice}
               client={previewData.client}
               type={previewData.type}
               onClose={handleCloseInvoicePreview}
               paymentAccounts={paymentAccounts}
               appSettings={appSettings}
-          />
+            />
+          )}
+        </div>
       )}
-    </div>
+    </NotificationProvider>
   );
 };
 

@@ -19,9 +19,9 @@ const ClientForm: React.FC<ClientFormProps> = ({ client, onSave, onCancel }) => 
         }
     }, [client]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onSave({ id: client?.id, name, email, phone, avatarUrl: client?.avatarUrl || '' });
+        await onSave({ id: client?.id, name, email, phone, avatarUrl: client?.avatarUrl || '' });
     };
 
     return (

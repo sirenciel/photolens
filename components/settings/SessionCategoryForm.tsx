@@ -11,9 +11,9 @@ const SessionCategoryForm: React.FC<SessionCategoryFormProps> = ({ category, onS
         }
     }, [category]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onSave({ id: category?.id, name });
+        await onSave({ id: category?.id, name });
     };
 
     return (

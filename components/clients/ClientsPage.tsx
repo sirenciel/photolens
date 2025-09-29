@@ -16,8 +16,8 @@ const ClientsPage: React.FC<ClientsPageProps> = ({ clients, currentUser, onSaveC
         setIsModalOpen(true);
     };
 
-    const handleSave = (clientData: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => {
-        onSaveClient(clientData);
+    const handleSave = async (clientData: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }) => {
+        await onSaveClient(clientData);
         setIsModalOpen(false);
     };
 

@@ -36,14 +36,14 @@ const ExpensesPage: React.FC<ExpensesPageProps> = ({ expenses, bookings, payment
         setIsModalOpen(true);
     };
 
-    const handleSave = (expenseData: Omit<Expense, 'id'> & { id?: string }) => {
-        onSaveExpense(expenseData);
+    const handleSave = async (expenseData: Omit<Expense, 'id'> & { id?: string }) => {
+        await onSaveExpense(expenseData);
         setIsModalOpen(false);
     };
 
-    const handleDelete = (expenseId: string) => {
+    const handleDelete = async (expenseId: string) => {
         if (window.confirm('Are you sure you want to delete this expense record?')) {
-            onDeleteExpense(expenseId);
+            await onDeleteExpense(expenseId);
         }
     };
 
