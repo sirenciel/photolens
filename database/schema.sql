@@ -130,6 +130,10 @@ CREATE TABLE editing_jobs (
     status_id VARCHAR(50),
     upload_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     priority VARCHAR(20) DEFAULT 'Normal' CHECK (priority IN ('Low', 'Normal', 'High', 'Urgent')),
+    drive_folder_url TEXT,
+    photographer_notes TEXT,
+    revision_notes JSONB,
+    revision_count INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

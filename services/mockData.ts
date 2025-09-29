@@ -1,4 +1,22 @@
-import { UserRole, Booking, Invoice, Activity, RevenueData, Client, EditingJob, Expense, PandLData, SessionRevenue, StaffMember, SessionCategory, EditingStatus, PaymentAccount, AppSettings } from '../types';
+// Temporary shim: mock data removed in favor of real Supabase data.
+// Keeping empty exports to avoid import errors while we migrate callers.
+export const mockEditingJobs = [] as any[];
+export const mockActivities = [] as any[];
+export const mockRevenueData = [] as any[];
+export const mockPandLData = [] as any[];
+export const mockSessionRevenue = [] as any[];
+export const mockEditingStatuses = [] as any[];
+export const mockSettings = {
+  companyProfile: { name: '', address: '', email: '', logoUrl: '' },
+  invoiceSettings: { prefix: 'INV', defaultDueDays: 14, footerNotes: '' },
+  automatedReminders: { enabled: true, frequencyDays: 7 },
+};
+export const mockStaff = [] as any[];
+export const mockClients = [] as any[];
+export const mockSessionTypes = [] as any[];
+export const mockPaymentAccounts = [] as any[];
+export const mockBookings = [] as any[];
+export const mockExpenses = [] as any[];import { UserRole, Booking, Invoice, Activity, RevenueData, Client, EditingJob, Expense, PandLData, SessionRevenue, StaffMember, SessionCategory, EditingStatus, PaymentAccount, AppSettings } from '../types';
 
 export const mockStaff: StaffMember[] = [
     { id: 'S001', name: 'Alex Wolfe', email: 'alex.wolfe@lensledger.com', avatarUrl: 'https://picsum.photos/seed/user-alex/100/100', role: UserRole.Owner, status: 'Active', lastLogin: new Date() },
@@ -117,12 +135,12 @@ export const mockEditingJobs: EditingJob[] = [
 ];
 
 export const mockExpenses: Expense[] = [
-    { id: 'E001', category: 'Software', description: 'Adobe Creative Cloud', amount: 59.99, date: new Date(new Date().setMonth(new Date().getMonth() - 1)), accountId: 'PA001'},
-    { id: 'E002', category: 'Studio', description: 'Studio Rent', amount: 1500, date: new Date(new Date().setMonth(new Date().getMonth() - 1)), accountId: 'PA001'},
-    { id: 'E003', category: 'Marketing', description: 'Facebook Ads', amount: 250, date: new Date(new Date().setMonth(new Date().getMonth() - 2)), accountId: 'PA001'},
-    { id: 'E004', category: 'Gear', description: 'New Lens Filter for B006', amount: 120, date: new Date(new Date().setDate(new Date().getDate() - 25)), accountId: 'PA002', bookingId: 'B006' },
-    { id: 'E005', category: 'Travel', description: 'Gas for client shoot B008', amount: 40, date: new Date(new Date().setDate(new Date().getDate() - 40)), accountId: 'PA002', bookingId: 'B008' },
-    { id: 'E006', category: 'Gear', description: 'Memory Cards', amount: 85, date: new Date(new Date().setDate(new Date().getDate() - 5)), accountId: 'PA002'},
+    { id: 'a3f1c2e4-1234-5678-9abc-def012345678', category: 'Software', description: 'Adobe Creative Cloud', amount: 59.99, date: new Date(new Date().setMonth(new Date().getMonth() - 1)), accountId: 'b1e2d3c4-2345-6789-abcd-ef0123456789'},
+    { id: 'b2e3f4a5-2345-6789-abcd-ef0123456789', category: 'Studio', description: 'Studio Rent', amount: 1500, date: new Date(new Date().setMonth(new Date().getMonth() - 1)), accountId: 'b1e2d3c4-2345-6789-abcd-ef0123456789'},
+    { id: 'c3f4a5b6-3456-789a-bcde-f0123456789a', category: 'Marketing', description: 'Facebook Ads', amount: 250, date: new Date(new Date().setMonth(new Date().getMonth() - 2)), accountId: 'b1e2d3c4-2345-6789-abcd-ef0123456789'},
+    { id: 'd4a5b6c7-4567-89ab-cdef-0123456789ab', category: 'Gear', description: 'New Lens Filter for B006', amount: 120, date: new Date(new Date().setDate(new Date().getDate() - 25)), accountId: 'e5b6c7d8-5678-9abc-def0-123456789abc', bookingId: 'B006' },
+    { id: 'e5b6c7d8-5678-9abc-def0-123456789abc', category: 'Travel', description: 'Gas for client shoot B008', amount: 40, date: new Date(new Date().setDate(new Date().getDate() - 40)), accountId: 'e5b6c7d8-5678-9abc-def0-123456789abc', bookingId: 'B008' },
+    { id: 'f6c7d8e9-6789-abcd-ef01-23456789abcd', category: 'Gear', description: 'Memory Cards', amount: 85, date: new Date(new Date().setDate(new Date().getDate() - 5)), accountId: 'e5b6c7d8-5678-9abc-def0-123456789abc'},
 
 ];
 

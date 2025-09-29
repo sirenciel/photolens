@@ -4,6 +4,7 @@ import KPICard from './KPICard';
 import RevenueChart from './RevenueChart';
 import UpcomingBookings from './UpcomingBookings';
 import RecentActivity from './RecentActivity';
+import EmptyStateMessage from './EmptyStateMessage';
 import { KPI, DashboardProps } from '../types';
 
 const KPICardIcon1 = () => <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /></svg>;
@@ -18,6 +19,8 @@ const Dashboard: React.FC<DashboardProps> = ({ bookings, invoices, editingJobs, 
     const overdueInvoicesCount = invoices.filter(i => i.status === 'Overdue').length;
     const editingQueueCount = editingJobs.filter(j => j.statusId === 'status-1').length;
 
+    // Check if this is a fresh installation with no data
+    const hasNoData = bookings.length === 0 && invoices.length === 0 && activities.length === 0;
 
     const kpiData: KPI[] = [
         { title: 'Total Revenue', value: `$${(totalRevenue / 1000).toFixed(1)}k`, change: '+12.5%', changeType: 'increase', icon: <KPICardIcon1 /> },
@@ -25,6 +28,19 @@ const Dashboard: React.FC<DashboardProps> = ({ bookings, invoices, editingJobs, 
         { title: 'Overdue Invoices', value: overdueInvoicesCount.toString(), change: '-5.2%', changeType: 'decrease', icon: <KPICardIcon3 />, onClick: () => navigateAndFilter('Invoices', { status: 'Overdue' }) },
         { title: 'Editing Queue', value: editingQueueCount.toString(), change: '+3 new', changeType: 'increase', icon: <KPICardIcon4 />, onClick: () => navigateAndFilter('Editing', { status: 'status-1' }) },
     ];
+
+    if (hasNoData && currentUser.name === 'Admin (local)') {
+        return (
+            <div className="min-h-screen">
+                <EmptyStateMessage
+                    title="Welcome to PhotoLens!"
+                    message="Your photography business management system is ready, but your database needs some initial data to get started. Please follow the setup guide to add your first staff member, clients, and session types."
+                    actionText="Go to Setup Guide"
+                    onAction={() => window.open('/README-DATABASE-SETUP.md', '_blank')}
+                />
+            </div>
+        );
+    }
     
     return (
         <div className="space-y-8">

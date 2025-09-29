@@ -319,28 +319,63 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
     // Category Handlers
     const handleAddNewCategory = () => { setEditingCategory(null); setIsCategoryModalOpen(true); };
     const handleEditCategory = (category: SessionCategory) => { setEditingCategory(category); setIsCategoryModalOpen(true); };
-    const handleSaveCategory = (categoryData: Omit<SessionCategory, 'packages'> & { id?: string }) => { onSaveCategory(categoryData); setIsCategoryModalOpen(false); };
-    const handleDeleteCategory = (categoryId: string) => { if (window.confirm('Are you sure you want to delete this entire category and all its packages?')) { onDeleteCategory(categoryId); } };
+    const handleSaveCategory = async (categoryData: Omit<SessionCategory, 'packages'> & { id?: string }) => {
+        await onSaveCategory(categoryData);
+        setIsCategoryModalOpen(false);
+    };
+    const handleDeleteCategory = async (categoryId: string) => {
+        if (window.confirm('Are you sure you want to delete this entire category and all its packages?')) {
+            await onDeleteCategory(categoryId);
+        }
+    };
 
     // Package Handlers
     const handleAddNewPackage = (categoryId: string) => { setActiveCategoryId(categoryId); setEditingPackage(null); setIsPackageModalOpen(true); };
     const handleEditPackage = (categoryId: string, pkg: SessionPackage) => { setActiveCategoryId(categoryId); setEditingPackage(pkg); setIsPackageModalOpen(true); };
-    const handleSavePackage = (packageData: Omit<SessionPackage, 'id'> & { id?: string }) => { if (activeCategoryId) { onSavePackage(activeCategoryId, packageData); } setIsPackageModalOpen(false); };
-    const handleDeletePackage = (categoryId: string, packageId: string) => { if (window.confirm('Are you sure you want to delete this package?')) { onDeletePackage(categoryId, packageId); } };
+    const handleSavePackage = async (packageData: Omit<SessionPackage, 'id'> & { id?: string }) => {
+        if (activeCategoryId) {
+            await onSavePackage(activeCategoryId, packageData);
+        }
+        setIsPackageModalOpen(false);
+    };
+    const handleDeletePackage = async (categoryId: string, packageId: string) => {
+        if (window.confirm('Are you sure you want to delete this package?')) {
+            await onDeletePackage(categoryId, packageId);
+        }
+    };
 
     // Status Handlers
     const handleAddNewStatus = () => { setEditingStatus(null); setIsStatusModalOpen(true); };
     const handleEditStatus = (status: EditingStatus) => { setEditingStatus(status); setIsStatusModalOpen(true); };
-    const handleSaveStatus = (statusData: Omit<EditingStatus, 'id'> & { id?: string }) => { onSaveStatus(statusData); setIsStatusModalOpen(false); };
-    const handleDeleteStatus = (statusId: string) => { if (window.confirm('Are you sure you want to delete this status?')) { onDeleteStatus(statusId); } };
+    const handleSaveStatus = async (statusData: Omit<EditingStatus, 'id'> & { id?: string }) => {
+        await onSaveStatus(statusData);
+        setIsStatusModalOpen(false);
+    };
+    const handleDeleteStatus = async (statusId: string) => {
+        if (window.confirm('Are you sure you want to delete this status?')) {
+            await onDeleteStatus(statusId);
+        }
+    };
 
     // Account Handlers
     const handleAddNewAccount = () => { setEditingAccount(null); setIsAccountModalOpen(true); };
     const handleEditAccount = (account: PaymentAccount) => { setEditingAccount(account); setIsAccountModalOpen(true); };
-    const handleSaveAccount = (accountData: Omit<PaymentAccount, 'id'> & { id?: string }) => { onSavePaymentAccount(accountData); setIsAccountModalOpen(false); };
-    const handleDeleteAccount = (accountId: string) => { if (window.confirm('Are you sure you want to delete this payment account?')) { onDeletePaymentAccount(accountId); } };
+    const handleSaveAccount = async (accountData: Omit<PaymentAccount, 'id'> & { id?: string }) => {
+        await onSavePaymentAccount(accountData);
+        setIsAccountModalOpen(false);
+    };
+    const handleDeleteAccount = async (accountId: string) => {
+        if (window.confirm('Are you sure you want to delete this payment account?')) {
+            await onDeletePaymentAccount(accountId);
+        }
+    };
 
-    const statusColorClass = (color: EditingStatus['color']) => `bg-${color}-500/20 text-${color}-300 border-${color}-500/30`;
+    const statusColorClass = (color: EditingStatus['color']) => {
+        if (color.startsWith('#')) {
+            return 'bg-slate-800 text-slate-200 border border-slate-600';
+        }
+        return `bg-${color}-500/20 text-${color}-300 border-${color}-500/30`;
+    };
     
     const getPackageUsageCount = (packageId: string) => bookings.filter(b => b.sessionPackageId === packageId).length;
     const getStatusUsageCount = (statusId: string) => editingJobs.filter(job => job.statusId === statusId).length;

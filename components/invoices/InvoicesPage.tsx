@@ -5,7 +5,7 @@ import InvoicesTable from './InvoicesTable';
 import Modal from '../shared/Modal';
 import InvoiceForm from './InvoiceForm';
 import RecordPaymentForm from './RecordPaymentForm';
-import { InvoicesPageProps, Invoice, Permission, Payment } from '../../types';
+import { InvoicesPageProps, Invoice, Permission, Payment, Booking } from '../../types';
 import { hasPermission } from '../../services/permissions';
 
 const InvoiceKPICard: React.FC<{ title: string; value: string; icon: React.ReactNode }> = ({ title, value, icon }) => (
@@ -64,8 +64,8 @@ const InvoicesPage: React.FC<InvoicesPageProps> = ({ invoices, bookings, clients
         setIsFormModalOpen(true);
     };
 
-    const handleSave = (invoiceData: Omit<Invoice, 'id' | 'clientName' | 'clientAvatarUrl' | 'amount' | 'amountPaid' | 'payments'> & { id?: string }) => {
-        onSaveInvoice(invoiceData);
+    const handleSave = async (invoiceData: Omit<Invoice, 'id' | 'clientName' | 'clientAvatarUrl' | 'amount' | 'amountPaid' | 'payments'> & { id?: string }) => {
+        await onSaveInvoice(invoiceData);
         setIsFormModalOpen(false);
     };
 
@@ -121,9 +121,9 @@ const InvoicesPage: React.FC<InvoicesPageProps> = ({ invoices, bookings, clients
         setIsPaymentModalOpen(true);
     };
 
-    const handleSavePayment = (paymentData: Omit<Payment, 'id' | 'recordedBy'>) => {
+    const handleSavePayment = async (paymentData: Omit<Payment, 'id' | 'recordedBy'>) => {
         if (invoiceForPayment) {
-            onRecordPayment(invoiceForPayment.id, paymentData);
+            await onRecordPayment(invoiceForPayment.id, paymentData);
         }
         setIsPaymentModalOpen(false);
         setInvoiceForPayment(null);
@@ -139,8 +139,9 @@ const InvoicesPage: React.FC<InvoicesPageProps> = ({ invoices, bookings, clients
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
     }
     
-    const uninvoicedBookings = bookings.filter(b => b.invoiceId === '-' && b.status !== 'Cancelled');
-    const uninvoicedCompletedBookings = bookings.filter(b => b.status === 'Completed' && b.invoiceId === '-');
+    const isUninvoiced = (booking: Booking) => !booking.invoiceId;
+    const uninvoicedBookings = bookings.filter(b => isUninvoiced(b) && b.status !== 'Cancelled');
+    const uninvoicedCompletedBookings = bookings.filter(b => b.status === 'Completed' && isUninvoiced(b));
 
     return (
         <div className="space-y-8">

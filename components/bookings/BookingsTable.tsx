@@ -1,6 +1,7 @@
 import React from 'react';
 import { Booking, Permission, StaffMember } from '../../types';
 import StatusBadge from './StatusBadge';
+import WorkflowStatusBadge from '../shared/WorkflowStatusBadge';
 import { hasPermission } from '../../services/permissions';
 import { NoteIcon } from '../../constants';
 
@@ -72,7 +73,7 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings, currentUser, on
                                 <td className="p-4 text-slate-300 whitespace-nowrap">{booking.photographer}</td>
                                 <td className="p-4 whitespace-nowrap"><StatusBadge status={booking.status} /></td>
                                 <td className="p-4 text-cyan-400 whitespace-nowrap font-mono">
-                                    {booking.invoiceId !== '-' ? (
+                                    {booking.invoiceId ? (
                                         <span
                                             className="hover:underline cursor-pointer"
                                             onClick={() => onPreviewInvoice(booking.invoiceId)}

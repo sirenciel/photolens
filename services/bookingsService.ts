@@ -128,7 +128,7 @@ export const bookingsService = {
     if (updates.invoiceId !== undefined) updateData.invoice_id = updates.invoiceId;
     if (updates.notes !== undefined) updateData.notes = updates.notes;
     if (updates.location !== undefined) updateData.location = updates.location;
-    if (updates.photoSelections) updateData.photo_selections = updates.photoSelections;
+    if (updates.photoSelections !== undefined) updateData.photo_selections = updates.photoSelections;
     
     const { data, error } = await supabase
       .from('bookings')
@@ -208,156 +208,267 @@ export const bookingsService = {
   }
 };
 
+const INVOICE_SELECT = `
+  *,
+  clients:client_id (name, avatar_url),
+  bookings:booking_id (id),
+  invoice_items (id, description, quantity, rate, amount),
+  payments:payments (id, amount, date, method, account_id, notes)
+`;
+
+const mapInvoiceRow = (invoice: any): Invoice => {
+  const items = (invoice.invoice_items || []).map((item: any) => ({
+    id: item.id,
+    description: item.description,
+    quantity: Number(item.quantity || 0),
+    price: Number(item.rate || 0)
+  }));
+
+  const payments = (invoice.payments || []).map((payment: any) => ({
+    id: payment.id,
+    amount: Number(payment.amount || 0),
+    date: new Date(payment.date),
+    accountId: payment.account_id,
+    methodNotes: payment.notes || payment.method || '',
+    recordedBy: 'System'
+  }));
+
+  const amountPaid = payments.reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0);
+
+  return {
+    id: invoice.id,
+    clientId: invoice.client_id,
+    clientName: invoice.clients?.name || '',
+    clientAvatarUrl: invoice.clients?.avatar_url || '',
+    bookingId: invoice.booking_id,
+    invoiceNumber: invoice.invoice_number,
+    date: new Date(invoice.date),
+    dueDate: new Date(invoice.due_date),
+    status: invoice.status as 'Draft' | 'Sent' | 'Paid' | 'Overdue' | 'Cancelled',
+    subtotal: Number(invoice.subtotal || 0),
+    tax: Number(invoice.tax || 0),
+    total: Number(invoice.total || 0),
+    notes: invoice.notes,
+    items,
+    amount: Number(invoice.total || 0),
+    amountPaid,
+    payments,
+    lastReminderSent: invoice.last_reminder_sent ? new Date(invoice.last_reminder_sent) : undefined
+  };
+};
+
+type InvoiceSaveInput = {
+  id?: string;
+  clientId: string;
+  bookingId?: string | null;
+  invoiceNumber: string;
+  date: Date;
+  dueDate: Date;
+  status: Invoice['status'];
+  subtotal: number;
+  tax: number;
+  total: number;
+  notes?: string;
+  items: { id?: string; description: string; quantity: number; price: number }[];
+};
+
+type PaymentSaveInput = {
+  amount: number;
+  date: Date;
+  accountId?: string;
+  methodNotes?: string;
+};
+
 // Invoices Service
 export const invoicesService = {
   async getAll(): Promise<Invoice[]> {
     const { data, error } = await supabase
       .from('invoices')
-      .select(`
-        *,
-        clients:client_id (name),
-        bookings:booking_id (id)
-      `)
+      .select(INVOICE_SELECT)
       .order('date', { ascending: false });
-    
+
     if (error) throw error;
-    
-    return data.map(invoice => ({
-      id: invoice.id,
-      clientId: invoice.client_id,
-      clientName: invoice.clients?.name || '',
-      bookingId: invoice.booking_id,
-      invoiceNumber: invoice.invoice_number,
-      date: new Date(invoice.date),
-      dueDate: new Date(invoice.due_date),
-      status: invoice.status as 'Draft' | 'Sent' | 'Paid' | 'Overdue' | 'Cancelled',
-      subtotal: invoice.subtotal,
-      tax: invoice.tax,
-      total: invoice.total,
-      notes: invoice.notes,
-      items: [] // Will be populated by a separate call if needed
-    }));
+
+    return (data || []).map(mapInvoiceRow);
   },
 
-  async create(invoice: Omit<Invoice, 'id' | 'clientName' | 'items'>): Promise<Invoice> {
+  async getById(id: string): Promise<Invoice | null> {
+    const { data, error } = await supabase
+      .from('invoices')
+      .select(INVOICE_SELECT)
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw error;
+    }
+
+    if (!data) return null;
+    return mapInvoiceRow(data);
+  },
+
+  async create(invoice: InvoiceSaveInput): Promise<Invoice> {
     const { data, error } = await supabase
       .from('invoices')
       .insert({
         client_id: invoice.clientId,
-        booking_id: invoice.bookingId,
+        booking_id: invoice.bookingId || null,
         invoice_number: invoice.invoiceNumber,
         date: invoice.date.toISOString().split('T')[0],
         due_date: invoice.dueDate.toISOString().split('T')[0],
-        status: invoice.status || 'Draft',
+        status: invoice.status,
         subtotal: invoice.subtotal,
-        tax: invoice.tax || 0,
+        tax: invoice.tax,
         total: invoice.total,
         notes: invoice.notes
       })
-      .select(`
-        *,
-        clients:client_id (name)
-      `)
+      .select('id, booking_id')
       .single();
-    
+
     if (error) throw error;
-    
-    return {
-      id: data.id,
-      clientId: data.client_id,
-      clientName: data.clients?.name || '',
-      bookingId: data.booking_id,
-      invoiceNumber: data.invoice_number,
-      date: new Date(data.date),
-      dueDate: new Date(data.due_date),
-      status: data.status as 'Draft' | 'Sent' | 'Paid' | 'Overdue' | 'Cancelled',
-      subtotal: data.subtotal,
-      tax: data.tax,
-      total: data.total,
-      notes: data.notes,
-      items: []
-    };
+
+    const invoiceId = data.id;
+
+    if (invoice.items.length) {
+      const { error: itemsError } = await supabase
+        .from('invoice_items')
+        .insert(invoice.items.map(item => ({
+          invoice_id: invoiceId,
+          description: item.description,
+          quantity: item.quantity,
+          rate: item.price,
+          amount: item.quantity * item.price
+        })));
+
+      if (itemsError) throw itemsError;
+    }
+
+    if (invoice.bookingId) {
+      await supabase
+        .from('bookings')
+        .update({ invoice_id: invoiceId })
+        .eq('id', invoice.bookingId);
+    }
+
+    const saved = await this.getById(invoiceId);
+    if (!saved) throw new Error('Failed to load invoice after creation');
+    return saved;
   },
 
-  async update(id: string, updates: Partial<Invoice>): Promise<Invoice> {
-    const updateData: any = {};
-    
-    if (updates.clientId) updateData.client_id = updates.clientId;
-    if (updates.bookingId !== undefined) updateData.booking_id = updates.bookingId;
-    if (updates.invoiceNumber) updateData.invoice_number = updates.invoiceNumber;
-    if (updates.date) updateData.date = updates.date.toISOString().split('T')[0];
-    if (updates.dueDate) updateData.due_date = updates.dueDate.toISOString().split('T')[0];
-    if (updates.status) updateData.status = updates.status;
-    if (updates.subtotal !== undefined) updateData.subtotal = updates.subtotal;
-    if (updates.tax !== undefined) updateData.tax = updates.tax;
-    if (updates.total !== undefined) updateData.total = updates.total;
-    if (updates.notes !== undefined) updateData.notes = updates.notes;
-    
-    const { data, error } = await supabase
+  async update(id: string, updates: InvoiceSaveInput): Promise<Invoice> {
+    const existing = await this.getById(id);
+
+    const { error } = await supabase
       .from('invoices')
-      .update(updateData)
-      .eq('id', id)
-      .select(`
-        *,
-        clients:client_id (name)
-      `)
-      .single();
-    
+      .update({
+        client_id: updates.clientId,
+        booking_id: updates.bookingId || null,
+        invoice_number: updates.invoiceNumber,
+        date: updates.date.toISOString().split('T')[0],
+        due_date: updates.dueDate.toISOString().split('T')[0],
+        status: updates.status,
+        subtotal: updates.subtotal,
+        tax: updates.tax,
+        total: updates.total,
+        notes: updates.notes
+      })
+      .eq('id', id);
+
     if (error) throw error;
-    
-    return {
-      id: data.id,
-      clientId: data.client_id,
-      clientName: data.clients?.name || '',
-      bookingId: data.booking_id,
-      invoiceNumber: data.invoice_number,
-      date: new Date(data.date),
-      dueDate: new Date(data.due_date),
-      status: data.status as 'Draft' | 'Sent' | 'Paid' | 'Overdue' | 'Cancelled',
-      subtotal: data.subtotal,
-      tax: data.tax,
-      total: data.total,
-      notes: data.notes,
-      items: []
-    };
+
+    // Replace invoice items
+    await supabase.from('invoice_items').delete().eq('invoice_id', id);
+
+    if (updates.items.length) {
+      const { error: itemsError } = await supabase
+        .from('invoice_items')
+        .insert(updates.items.map(item => ({
+          invoice_id: id,
+          description: item.description,
+          quantity: item.quantity,
+          rate: item.price,
+          amount: item.quantity * item.price
+        })));
+
+      if (itemsError) throw itemsError;
+    }
+
+    if (existing?.bookingId && existing.bookingId !== updates.bookingId) {
+      await supabase
+        .from('bookings')
+        .update({ invoice_id: null })
+        .eq('id', existing.bookingId);
+    }
+
+    if (updates.bookingId) {
+      await supabase
+        .from('bookings')
+        .update({ invoice_id: id })
+        .eq('id', updates.bookingId);
+    }
+
+    const saved = await this.getById(id);
+    if (!saved) throw new Error('Failed to load invoice after update');
+    return saved;
   },
 
   async delete(id: string): Promise<void> {
+    const existing = await this.getById(id);
+
     const { error } = await supabase
       .from('invoices')
       .delete()
       .eq('id', id);
-    
+
     if (error) throw error;
+
+    if (existing?.bookingId) {
+      await supabase
+        .from('bookings')
+        .update({ invoice_id: null })
+        .eq('id', existing.bookingId);
+    }
   },
 
   async getByClientId(clientId: string): Promise<Invoice[]> {
     const { data, error } = await supabase
       .from('invoices')
-      .select(`
-        *,
-        clients:client_id (name)
-      `)
+      .select(INVOICE_SELECT)
       .eq('client_id', clientId)
       .order('date', { ascending: false });
-    
+
     if (error) throw error;
-    
-    return data.map(invoice => ({
-      id: invoice.id,
-      clientId: invoice.client_id,
-      clientName: invoice.clients?.name || '',
-      bookingId: invoice.booking_id,
-      invoiceNumber: invoice.invoice_number,
-      date: new Date(invoice.date),
-      dueDate: new Date(invoice.due_date),
-      status: invoice.status as 'Draft' | 'Sent' | 'Paid' | 'Overdue' | 'Cancelled',
-      subtotal: invoice.subtotal,
-      tax: invoice.tax,
-      total: invoice.total,
-      notes: invoice.notes,
-      items: []
-    }));
+
+    return (data || []).map(mapInvoiceRow);
+  },
+
+  async recordPayment(invoiceId: string, payment: PaymentSaveInput): Promise<Invoice> {
+    const { error } = await supabase
+      .from('payments')
+      .insert({
+        invoice_id: invoiceId,
+        amount: payment.amount,
+        date: payment.date.toISOString().split('T')[0],
+        account_id: payment.accountId || null,
+        notes: payment.methodNotes || null,
+        method: null
+      });
+
+    if (error) throw error;
+
+    let updated = await this.getById(invoiceId);
+    if (!updated) throw new Error('Invoice not found after recording payment');
+
+    if (updated.amountPaid >= updated.total && updated.status !== 'Paid') {
+      await supabase
+        .from('invoices')
+        .update({ status: 'Paid' })
+        .eq('id', invoiceId);
+      updated = (await this.getById(invoiceId))!;
+    }
+
+    return updated;
   }
 };
 

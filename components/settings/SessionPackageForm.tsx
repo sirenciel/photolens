@@ -16,10 +16,10 @@ const SessionPackageForm: React.FC<SessionPackageFormProps> = ({ pkg, onSave, on
         }
     }, [pkg]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (price === '') return;
-        onSave({ id: pkg?.id, name, price });
+        await onSave({ id: pkg?.id, name, price });
     };
 
     return (
