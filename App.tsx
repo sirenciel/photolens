@@ -12,7 +12,9 @@ import StaffPage from './components/staff/StaffPage';
 import SettingsPage from './components/settings/SettingsPage';
 import ClientProfilePage from './components/clients/ClientProfilePage';
 import InvoicePreviewModal from './components/invoices/InvoicePreviewModal';
-import { mockBookings, mockClients, mockInvoices, mockEditingJobs, mockStaff, mockActivities, mockRevenueData, mockPandLData, mockSessionRevenue, mockSessionTypes, mockEditingStatuses, mockExpenses, mockPaymentAccounts, mockSettings } from './services/mockData';
+import { mockEditingJobs, mockActivities, mockRevenueData, mockPandLData, mockSessionRevenue, mockEditingStatuses, mockSettings } from './services/mockData';
+import { dataManager } from './services/dataManager';
+import { seedDatabase, checkDatabaseConnection } from './services/seedData';
 import { Client, Booking, StaffMember, Invoice, SessionCategory, SessionPackage, EditingJob, Permission, UserRole, EditingStatus, PhotoSelection, Activity, Payment, Expense, InvoiceItem, PaymentAccount, ClientFinancialStatus, AppSettings } from './types';
 import { hasPermission, PAGE_PERMISSIONS } from './services/permissions';
 
@@ -22,27 +24,111 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [pageFilters, setPageFilters] = useState<Record<string, any>>({});
   
-  // Simulate logged-in user state
-  const [currentUser, setCurrentUser] = useState<StaffMember>(mockStaff[0]); // Default to Owner
-
-  // Centralized state management
-  const [clients, setClients] = useState(mockClients);
-  const [bookings, setBookings] = useState(mockBookings);
-  const [invoices, setInvoices] = useState(mockInvoices);
+  // Data states - now managed by Supabase
+  const [clients, setClients] = useState<Client[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [sessionTypes, setSessionTypes] = useState<SessionCategory[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([]);
+  
+  // Mock data that doesn't need database yet
   const [editingJobs, setEditingJobs] = useState(mockEditingJobs);
-  const [staff, setStaff] = useState(mockStaff);
-  const [sessionTypes, setSessionTypes] = useState(mockSessionTypes);
   const [editingStatuses, setEditingStatuses] = useState(mockEditingStatuses);
   const [activities, setActivities] = useState(mockActivities);
-  const [expenses, setExpenses] = useState(mockExpenses);
   const [revenueData, setRevenueData] = useState(mockRevenueData);
   const [pandLData, setPandLData] = useState(mockPandLData);
   const [sessionRevenue, setSessionRevenue] = useState(mockSessionRevenue);
-  const [paymentAccounts, setPaymentAccounts] = useState(mockPaymentAccounts);
   const [appSettings, setAppSettings] = useState<AppSettings>(mockSettings);
+  
+  // Current user - will be the first staff member from database
+  const [currentUser, setCurrentUser] = useState<StaffMember | null>(null);
+  
+  // Loading states
+  const [isLoading, setIsLoading] = useState(true);
+  const [dbConnected, setDbConnected] = useState(false);
 
   // Global Invoice Preview Modal State
   const [previewData, setPreviewData] = useState<{ invoice: Invoice | null; client: Client | null; type: 'invoice' | 'receipt' }>({ invoice: null, client: null, type: 'invoice' });
+
+  // Initialize data from Supabase
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Check database connection
+        const connected = await checkDatabaseConnection();
+        setDbConnected(connected);
+        
+        if (!connected) {
+          console.error('Could not connect to database. Using mock data as fallback.');
+          // Fall back to mock data if database is not available
+          setClients([]);
+          setBookings([]);
+          setInvoices([]);
+          setStaff([]);
+          setSessionTypes([]);
+          setExpenses([]);
+          setPaymentAccounts([]);
+          setIsLoading(false);
+          return;
+        }
+
+        // Try to seed database with initial data if empty
+        try {
+          const staffData = await dataManager.getStaff();
+          if (staffData.length === 0) {
+            console.log('Database appears empty, seeding with initial data...');
+            await seedDatabase();
+          }
+        } catch (error) {
+          console.error('Error checking/seeding database:', error);
+        }
+
+        // Load all data from Supabase
+        const [
+          staffData,
+          clientsData,
+          bookingsData,
+          sessionTypesData,
+          invoicesData,
+          expensesData,
+          paymentAccountsData
+        ] = await Promise.all([
+          dataManager.getStaff(),
+          dataManager.getClients(),
+          dataManager.getBookings(),
+          dataManager.getSessionTypes(),
+          dataManager.getInvoices(),
+          dataManager.getExpenses(),
+          dataManager.getPaymentAccounts()
+        ]);
+
+        setStaff(staffData);
+        setClients(clientsData);
+        setBookings(bookingsData);
+        setSessionTypes(sessionTypesData);
+        setInvoices(invoicesData);
+        setExpenses(expensesData);
+        setPaymentAccounts(paymentAccountsData);
+
+        // Set current user to first staff member (owner)
+        if (staffData.length > 0) {
+          setCurrentUser(staffData[0]);
+        }
+
+      } catch (error) {
+        console.error('Error initializing data:', error);
+        setDbConnected(false);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeData();
+  }, []);
 
     // Automated Invoice Reminder Logic
     useEffect(() => {
@@ -148,125 +234,74 @@ const App: React.FC = () => {
     }));
   };
 
-  const handleSaveClient = (clientToSave: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }): Client | void => {
-    if (clientToSave.id) {
-      // Update existing client
-      setClients(clients.map(c => c.id === clientToSave.id ? { ...c, ...clientToSave } : c));
-    } else {
-      // Add new client
-      const newClient: Client = {
-        ...clientToSave,
-        id: `C${String(clients.length + 1).padStart(3, '0')}`,
-        joinDate: new Date(),
-        totalBookings: 0,
-        totalSpent: 0,
-        avatarUrl: `https://picsum.photos/seed/new-client-${clients.length + 1}/100/100`
-      };
-      setClients([newClient, ...clients]);
-      return newClient;
+  const handleSaveClient = async (clientToSave: Omit<Client, 'id' | 'joinDate' | 'totalBookings' | 'totalSpent'> & { id?: string }): Promise<Client | void> => {
+    try {
+      const savedClient = await dataManager.saveClient(clientToSave);
+      
+      if (clientToSave.id) {
+        // Update existing client
+        setClients(clients.map(c => c.id === clientToSave.id ? savedClient : c));
+      } else {
+        // Add new client
+        setClients([savedClient, ...clients]);
+      }
+      
+      return savedClient;
+    } catch (error) {
+      console.error('Error saving client:', error);
+      // You could show a user-friendly error message here
     }
   };
   
-  const handleSaveClientNotes = (clientId: string, notes: string) => {
-    setClients(clients.map(c => c.id === clientId ? { ...c, notes } : c));
-  };
-
-  const handleDeleteClient = (clientId: string) => {
-    const updatedBookings = bookings.filter(b => b.clientId !== clientId);
-    const updatedInvoices = invoices.filter(i => i.clientId !== clientId);
-    const updatedEditingJobs = editingJobs.filter(job => !bookings.some(b => b.clientId === clientId && b.id === job.bookingId));
-    
-    setBookings(updatedBookings);
-    setInvoices(updatedInvoices);
-    setEditingJobs(updatedEditingJobs);
-    setClients(clients.filter(c => c.id !== clientId));
-
-    setSelectedClientId(null); // Go back to the list view after deleting
-  };
-
-  const handleSaveBooking = (bookingToSave: Omit<Booking, 'id' | 'clientName' | 'clientAvatarUrl' | 'photographer' | 'invoiceId' | 'sessionType' | 'photoSelections'> & { id?: string }): Booking | void => {
-    const getSessionTypeName = () => {
-        const category = sessionTypes.find(st => st.id === bookingToSave.sessionCategoryId);
-        const pkg = category?.packages.find(p => p.id === bookingToSave.sessionPackageId);
-        return pkg ? `${category?.name} - ${pkg.name}` : 'Unknown Session';
+  const handleSaveClientNotes = async (clientId: string, notes: string) => {
+    try {
+      const updatedClient = await dataManager.saveClient({ id: clientId, notes } as any);
+      setClients(clients.map(c => c.id === clientId ? updatedClient : c));
+    } catch (error) {
+      console.error('Error updating client notes:', error);
     }
+  };
 
-    let savedBooking: Booking | undefined;
-    let updatedBookings: Booking[];
-    const wasCompleted = bookingToSave.id ? bookings.find(b => b.id === bookingToSave.id)?.status === 'Completed' : false;
+  const handleDeleteClient = async (clientId: string) => {
+    try {
+      await dataManager.deleteClient(clientId);
+      
+      // Remove from local state
+      setClients(clients.filter(c => c.id !== clientId));
+      
+      // Note: Related bookings and invoices will be cascade deleted by the database
+      // So we need to refresh those lists
+      const updatedBookings = await dataManager.getBookings(true);
+      const updatedInvoices = await dataManager.getInvoices(true);
+      
+      setBookings(updatedBookings);
+      setInvoices(updatedInvoices);
+      
+      setSelectedClientId(null); // Go back to the list view after deleting
+    } catch (error) {
+      console.error('Error deleting client:', error);
+    }
+  };
 
-    if (bookingToSave.id) {
+  const handleSaveBooking = async (bookingToSave: Omit<Booking, 'id' | 'clientName' | 'clientAvatarUrl' | 'photographer' | 'invoiceId' | 'sessionType' | 'photoSelections'> & { id?: string }): Promise<Booking | void> => {
+    try {
+      const savedBooking = await dataManager.saveBooking(bookingToSave);
+      
+      if (bookingToSave.id) {
         // Update existing booking
-        updatedBookings = bookings.map(b => {
-            if (b.id === bookingToSave.id) {
-                const client = clients.find(c => c.id === bookingToSave.clientId);
-                const photographer = staff.find(s => s.id === bookingToSave.photographerId);
-                const updatedBooking = { 
-                    ...b, 
-                    ...bookingToSave,
-                    clientName: client?.name || 'N/A',
-                    clientAvatarUrl: client?.avatarUrl || '',
-                    photographer: photographer?.name || 'N/A',
-                    sessionType: getSessionTypeName(),
-                };
-                 savedBooking = updatedBooking;
-                 return updatedBooking;
-            }
-            return b;
-        });
-        setBookings(updatedBookings);
-    } else {
+        setBookings(bookings.map(b => b.id === bookingToSave.id ? savedBooking : b));
+      } else {
         // Add new booking
-        const client = clients.find(c => c.id === bookingToSave.clientId);
-        const photographer = staff.find(s => s.id === bookingToSave.photographerId);
-        const newBooking: Booking = {
-            ...bookingToSave,
-            id: `B${String(bookings.length + 1).padStart(3, '0')}`,
-            clientName: client?.name || 'N/A',
-            clientAvatarUrl: client?.avatarUrl || `https://picsum.photos/seed/${bookingToSave.clientId}/100/100`,
-            photographer: photographer?.name || 'N/A',
-            invoiceId: '-',
-            sessionType: getSessionTypeName(),
-            photoSelections: [],
-        };
-        updatedBookings = [newBooking, ...bookings];
-        setBookings(updatedBookings);
-        savedBooking = newBooking;
-    }
-        
-    // INTEGRATION: Auto-create editing job when booking is completed
-    if (savedBooking && savedBooking.status === 'Completed' && !wasCompleted) {
-        const jobExists = editingJobs.some(job => job.bookingId === savedBooking!.id);
-        if (!jobExists) {
-            const firstStatus = editingStatuses.find(s => s.name === 'Awaiting Selection') || editingStatuses[0];
-            if(firstStatus) {
-                const newJob: Omit<EditingJob, 'id' | 'editorName' | 'editorAvatarUrl' | 'uploadDate'> = {
-                    bookingId: savedBooking.id,
-                    clientId: savedBooking.clientId,
-                    clientName: savedBooking.clientName,
-                    editorId: null,
-                    statusId: firstStatus.id,
-                };
-                handleSaveEditingJob(newJob);
-
-                const newActivity: Activity = {
-                    id: `A${Date.now()}`,
-                    user: 'System',
-                    userAvatarUrl: 'https://picsum.photos/seed/system/100/100',
-                    action: 'created editing job for',
-                    target: `${savedBooking.clientName} (${savedBooking.id})`,
-                    timestamp: new Date(),
-                };
-                setActivities([newActivity, ...activities]);
-            }
-        }
-    }
-
-
-    // Update client stats
-    if (savedBooking) {
-        updateClientStats(savedBooking.clientId, updatedBookings, invoices);
-        return savedBooking;
+        setBookings([savedBooking, ...bookings]);
+      }
+      
+      // Refresh clients to update their statistics
+      const updatedClients = await dataManager.getClients(true);
+      setClients(updatedClients);
+      
+      return savedBooking;
+    } catch (error) {
+      console.error('Error saving booking:', error);
     }
   };
 
@@ -283,47 +318,59 @@ const App: React.FC = () => {
             job.id === jobToUpdateId ? { ...job, photographerNotes: notes } : job
         );
     });
-};
-
-
-  const handleDeleteBooking = (bookingId: string) => {
-      const booking = bookings.find(b => b.id === bookingId);
-      if (!booking) return;
-
-      const { clientId } = booking;
-      let updatedInvoices = invoices;
-      
-      // Also unlink from any invoice
-      if (booking.invoiceId !== '-') {
-          updatedInvoices = invoices.filter(i => i.id !== booking.invoiceId);
-          setInvoices(updatedInvoices);
-      }
-      const updatedBookings = bookings.filter(b => b.id !== bookingId);
-      setBookings(updatedBookings);
-      
-      // Update client stats after booking deletion
-      updateClientStats(clientId, updatedBookings, updatedInvoices);
   };
 
-  const handleSaveStaff = (staffToSave: Omit<StaffMember, 'id' | 'status' | 'lastLogin' | 'avatarUrl'> & { id?: string }) => {
-    if (staffToSave.id) {
-        // Update existing staff
-        setStaff(staff.map(s => s.id === staffToSave.id ? { ...s, ...staffToSave } : s));
-    } else {
-        // Add new staff
-        const newStaff: StaffMember = {
-            ...staffToSave,
-            id: `S${String(staff.length + 1).padStart(3, '0')}`,
-            status: 'Invited',
-            lastLogin: new Date(), // This would be null in a real app until first login
-            avatarUrl: `https://picsum.photos/seed/new-staff-${staff.length + 1}/100/100`,
-        };
-        setStaff([newStaff, ...staff]);
+  const handleDeleteBooking = async (bookingId: string) => {
+    try {
+      await dataManager.deleteBooking(bookingId);
+      
+      // Remove from local state
+      setBookings(bookings.filter(b => b.id !== bookingId));
+      
+      // Refresh clients to update their statistics
+      const updatedClients = await dataManager.getClients(true);
+      setClients(updatedClients);
+      
+      // Also refresh invoices in case there were related invoices
+      const updatedInvoices = await dataManager.getInvoices(true);
+      setInvoices(updatedInvoices);
+    } catch (error) {
+      console.error('Error deleting booking:', error);
     }
   };
 
-  const handleDeleteStaff = (staffId: string) => {
-      // Un-assign from any bookings
+  const handleSaveStaff = async (staffToSave: Omit<StaffMember, 'id' | 'status' | 'lastLogin' | 'avatarUrl'> & { id?: string }) => {
+    try {
+      const savedStaff = await dataManager.saveStaff(staffToSave);
+      
+      if (staffToSave.id) {
+        // Update existing staff
+        setStaff(staff.map(s => s.id === staffToSave.id ? savedStaff : s));
+      } else {
+        // Add new staff
+        setStaff([savedStaff, ...staff]);
+      }
+      
+      return savedStaff;
+    } catch (error) {
+      console.error('Error saving staff:', error);
+    }
+  };
+
+  const handleDeleteStaff = async (staffId: string) => {
+    try {
+      await dataManager.deleteStaff(staffId);
+      
+      // Remove from local state
+      setStaff(staff.filter(s => s.id !== staffId));
+      
+      // Refresh bookings to handle any that were assigned to this staff member
+      const updatedBookings = await dataManager.getBookings(true);
+      setBookings(updatedBookings);
+    } catch (error) {
+      console.error('Error deleting staff:', error);
+    }
+  };
       setBookings(prev => prev.map(b => b.photographerId === staffId ? { ...b, photographerId: '', photographer: 'Unassigned' } : b));
       // Un-assign from any editing jobs
       setEditingJobs(prev => prev.map(job => job.editorId === staffId ? { ...job, editorId: null, editorName: 'Unassigned', editorAvatarUrl: 'https://picsum.photos/seed/user-unassigned/100/100' } : job));
@@ -499,23 +546,32 @@ const App: React.FC = () => {
     updateClientStats(invoiceToUpdate.clientId, bookings, updatedInvoices);
   };
 
-    const handleSaveExpense = (expenseToSave: Omit<Expense, 'id'> & { id?: string }) => {
-        if (expenseToSave.id) {
-            setExpenses(expenses.map(e => e.id === expenseToSave.id ? { ...e, ...expenseToSave } : e));
-        } else {
-            const newExpense: Expense = {
-                ...expenseToSave,
-                id: `E${Date.now()}`,
-            };
-            setExpenses([newExpense, ...expenses]);
+    const handleSaveExpense = async (expenseToSave: Omit<Expense, 'id'> & { id?: string }) => {
+        try {
+            const savedExpense = await dataManager.saveExpense(expenseToSave);
+            
+            if (expenseToSave.id) {
+                setExpenses(expenses.map(e => e.id === expenseToSave.id ? savedExpense : e));
+            } else {
+                setExpenses([savedExpense, ...expenses]);
+            }
+            
+            return savedExpense;
+        } catch (error) {
+            console.error('Error saving expense:', error);
         }
     };
 
-    const handleDeleteExpense = (expenseId: string) => {
-        setExpenses(expenses.filter(e => e.id !== expenseId));
+    const handleDeleteExpense = async (expenseId: string) => {
+        try {
+            await dataManager.deleteExpense(expenseId);
+            setExpenses(expenses.filter(e => e.id !== expenseId));
+        } catch (error) {
+            console.error('Error deleting expense:', error);
+        }
     };
 
-    const handleBillExpense = (expenseId: string) => {
+    const handleBillExpense = async (expenseId: string) => {
         const expense = expenses.find(e => e.id === expenseId);
         if (!expense || expense.isBilled) {
             alert("This expense cannot be billed or has already been billed.");
@@ -594,25 +650,35 @@ const App: React.FC = () => {
         alert(`Expense "${expense.description}" has been added to invoice ${invoice.id}.`);
     };
 
-  const handleSaveSessionCategory = (categoryToSave: Omit<SessionCategory, 'packages'> & { id?: string }) => {
-    if (categoryToSave.id) {
-        setSessionTypes(sessionTypes.map(st => st.id === categoryToSave.id ? { ...st, name: categoryToSave.name } : st));
-    } else {
-        const newCategory: SessionCategory = {
-            id: `SC${Date.now()}`,
-            name: categoryToSave.name,
-            packages: [],
-        };
-        setSessionTypes([...sessionTypes, newCategory]);
+  const handleSaveSessionCategory = async (categoryToSave: Omit<SessionCategory, 'packages'> & { id?: string }) => {
+    try {
+      const savedCategory = await dataManager.saveSessionCategory(categoryToSave);
+      
+      if (categoryToSave.id) {
+        setSessionTypes(sessionTypes.map(st => st.id === categoryToSave.id ? savedCategory : st));
+      } else {
+        setSessionTypes([...sessionTypes, savedCategory]);
+      }
+      
+      return savedCategory;
+    } catch (error) {
+      console.error('Error saving session category:', error);
     }
   };
   
-  const handleDeleteSessionCategory = (categoryId: string) => {
+  const handleDeleteSessionCategory = async (categoryId: string) => {
+    // Check if category is in use
     if (bookings.some(b => b.sessionCategoryId === categoryId)) {
         alert("Cannot delete category. It is currently used in one or more bookings.");
         return;
     }
-    setSessionTypes(sessionTypes.filter(st => st.id !== categoryId));
+    
+    try {
+      await dataManager.deleteSessionCategory(categoryId);
+      setSessionTypes(sessionTypes.filter(st => st.id !== categoryId));
+    } catch (error) {
+      console.error('Error deleting session category:', error);
+    }
   };
 
   const handleSaveSessionPackage = (categoryId: string, packageToSave: Omit<SessionPackage, 'id'> & { id?: string }) => {
@@ -885,28 +951,35 @@ const App: React.FC = () => {
         }
     };
 
-    const handleSavePaymentAccount = (accountToSave: Omit<PaymentAccount, 'id'> & { id?: string }) => {
-        if (accountToSave.id) {
-            setPaymentAccounts(paymentAccounts.map(acc => acc.id === accountToSave.id ? { ...acc, ...accountToSave } : acc));
-        } else {
-            const newAccount: PaymentAccount = {
-                ...accountToSave,
-                id: `PA${Date.now()}`,
-            };
-            setPaymentAccounts([...paymentAccounts, newAccount]);
+    const handleSavePaymentAccount = async (accountToSave: Omit<PaymentAccount, 'id'> & { id?: string }) => {
+        try {
+            const savedAccount = await dataManager.savePaymentAccount(accountToSave);
+            
+            if (accountToSave.id) {
+                setPaymentAccounts(paymentAccounts.map(acc => acc.id === accountToSave.id ? savedAccount : acc));
+            } else {
+                setPaymentAccounts([...paymentAccounts, savedAccount]);
+            }
+            
+            return savedAccount;
+        } catch (error) {
+            console.error('Error saving payment account:', error);
         }
     };
 
-    const handleDeletePaymentAccount = (accountId: string) => {
-        if (invoices.some(inv => inv.payments?.some(p => p.accountId === accountId))) {
-            alert("Cannot delete an account that has payments recorded to it in invoices.");
-            return;
-        }
+    const handleDeletePaymentAccount = async (accountId: string) => {
+        // Check if account is in use
         if (expenses.some(exp => exp.accountId === accountId)) {
             alert("Cannot delete an account that has expenses recorded from it.");
             return;
         }
-        setPaymentAccounts(paymentAccounts.filter(acc => acc.id !== accountId));
+        
+        try {
+            await dataManager.deletePaymentAccount(accountId);
+            setPaymentAccounts(paymentAccounts.filter(acc => acc.id !== accountId));
+        } catch (error) {
+            console.error('Error deleting payment account:', error);
+        }
     };
 
     const handleSaveSettings = (settings: AppSettings) => {
@@ -916,10 +989,30 @@ const App: React.FC = () => {
 
 
     const handleViewClient = (clientId: string) => {
-        if (hasPermission(currentUser.role, Permission.VIEW_CLIENTS)) {
+        if (currentUser && hasPermission(currentUser.role, Permission.VIEW_CLIENTS)) {
             setActivePage('Clients');
             setSelectedClientId(clientId);
         }
+    }
+    
+    // Show loading screen while initializing
+    if (isLoading || !currentUser) {
+        return (
+            <div className="flex h-screen bg-slate-900 text-slate-100 items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-500 mb-4 mx-auto"></div>
+                    <h2 className="text-xl font-semibold mb-2">Loading PhotoLens...</h2>
+                    <p className="text-slate-400">
+                        {!dbConnected ? 'Connecting to database...' : 'Loading your data...'}
+                    </p>
+                    {!dbConnected && (
+                        <p className="text-yellow-400 mt-2 text-sm">
+                            Make sure your Supabase connection is configured in .env.local
+                        </p>
+                    )}
+                </div>
+            </div>
+        );
     }
     
     // Filter data based on user role
